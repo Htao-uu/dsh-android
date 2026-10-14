@@ -96,6 +96,20 @@ def main():
         app = notes.render(changelog, "1.2.0", "app")
         check(app.startswith("# dsh-android 1.2.0"), True, "app channel unchanged")
 
+    # the real changelog must carry a section for every published hot package —
+    # otherwise release_hot.sh would PATCH the release body with the placeholder
+    real = notes.Changelog(ROOT / "CHANGELOG.md")
+    published = "1.2.0-t2-sp1"
+    check(published in real.versions(), True,
+          f"CHANGELOG has a section for the published hot package {published}")
+    body = notes.render(real, "1.2.0", "hot-history")
+    check("no hot package published" in body, False,
+          "the real hot-history body is the notes, not the placeholder")
+    check(published in body, True, "the real hot-history body mentions the package")
+    # and the single-package channel works for a three-part version
+    check(notes.render(real, published, "hot").startswith(f"## 热更新包 {published}"), True,
+          "the hot channel renders one three-part package")
+
     print(f"release_notes: {checks} checks, {failures} failure(s)")
     return 1 if failures else 0
 
