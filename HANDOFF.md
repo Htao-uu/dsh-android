@@ -110,9 +110,18 @@ return tracker.sp + 1                                          # 同线新内容
 - **走新 APK（baked 热包）**，不走"只发热包"；热包增量按 §2.2 准备作辅助通道。
 - **不发** 9/30 的 189MB 全量 APK；这一发只发 **slim APK + 热包 + SHA256SUMS**，并更新 `update.json`（不跑 `release.sh`，因为它硬要求全量 APK 存在）。
 
+### 3.4b 发布之后：真机核对
+发布完（或用户装完包、允许重启后）跑 **`sh docs/verify-ondevice.sh`** —— 只读脚本，逐项核对
+安装版本（`versionName/versionCode`）、`hotVersion`/`packagedHotVersion`、pnpm、市场版本、
+profile 三行，并把需要人眼的项（热包重放六步、#3 清数据闸门、#1 侧边栏 ⋯ 菜单、触感、
+市场页面与真装插件）列成带期望值的步骤。本版期望值集中在脚本顶部的 `EXPECT_*` 常量里，
+**发布新版本时只改那一段**。
+
 ### 3.5 CI：在 GitHub Actions 上组全量包（已批准；**待仓库写权限后 push**）
 **workflow**：`.github/workflows/release-full.yml`（`sync_repo.sh` 现在会镜像 `.github/`）。**只手动触发**
 （`workflow_dispatch`，inputs：`tag` 必填 / `dry_run` 可选），**不要加 push 触发** —— 一次跑 10–15 分钟。
+（顺带一条：本机 aapt2 是 x86_64 二进制、靠 `qemu-x86_64` 跑 —— 见 `docs/BUILD.md`；CI 的 x86_64 runner 反而**原生**，不需要 qemu。）
+
 **为什么 runner 用 x86_64 而不是 arm64**：Google 的 Android build-tools（aapt2/d8）只有 x86_64；载荷里的 arm64
 内容靠 `prepare_rootfs.sh` 里已有的 `npm i --os=linux --cpu=arm64 --libc=glibc` 跨平台安装 + `aarch64-linux-gnu-gcc`
 交叉编译 linkfix 产出。
@@ -383,6 +392,11 @@ curl -sSI -L "https://github.com/itiswdwa/dsh-android/releases/latest/download/d
 ## 10. 常用命令速查
 
 ```sh
+# 0b) 发布后真机验证（**只读**：不装包/不重启/不写 prefs；--haptic 才会震一下）
+sh docs/verify-ondevice.sh            # 每项给「期望 / 实际 / 结果」，末尾汇总 PASS/FAIL/MANUAL/SKIP
+sh docs/verify-ondevice.sh --haptic   # 额外验 POST /haptic（手机轻震一次）
+#    本版期望值都写在脚本顶部的 EXPECT_* 常量里（发布新版本时改那一段即可）
+
 # 0) 环境事实
 pwd=/mnt/Documents · 沙箱=PRoot Ubuntu（无 systemd）· node v22.23.2
 python3 / git / curl **有**（环境说明里说没有是旧的）· gh **没有** · java/javac 有（/usr/bin）
