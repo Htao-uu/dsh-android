@@ -102,13 +102,34 @@ class Changelog:
         version, so the list reads as that version's progress. (App versions
         themselves stay newest-first — that is what a changelog reader expects
         for releases they may have skipped over.)
+
+        Hot versions are `<app>-t<terminal>-sp<n>` (the three-part model) or the
+        older `<app>-sp<n>`. Matching only `<app>-sp` missed every three-part
+        package and made the hot-history channel render "no hot package published
+        yet" — which `release_hot.sh` would then PATCH onto the release body.
+        Match the app prefix and require an `-sp<N>` tail, with anything (a
+        terminal segment, say) allowed in between; a different app version still
+        cannot match, because the prefix carries the whole `1.2.0-`.
         """
-        prefix = f"{app}-sp"
+        prefix = f"{app}-"
 
-        def sp(version: str) -> int:
-            return int(version.rsplit("-sp", 1)[1])
+        def sp_of(version: str) -> int | None:
+            """The sp number of a hot version on this app line, or None."""
+            if not version.startswith(prefix):
+                return None
+            tail = version[len(prefix):]
+            if tail.startswith("sp"):                     # legacy two-part form
+                digits = tail[2:]
+            elif "-sp" in tail:                           # <app>-t<N>-sp<n>
+                digits = tail.rsplit("-sp", 1)[1]
+            else:
+                return None
+            try:
+                return int(digits)
+            except ValueError:
+                return None
 
-        return sorted((v for v in self.versions() if v.startswith(prefix)), key=sp)
+        return sorted((v for v in self.versions() if sp_of(v) is not None), key=sp_of)
 
 
 def heading(version: str, date: str) -> str:

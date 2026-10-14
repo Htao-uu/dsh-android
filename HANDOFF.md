@@ -99,7 +99,7 @@ return tracker.sp + 1                                          # 同线新内容
 | `scripts/sync_repo.sh ["msg"]` | 工作树 → checkout 镜像：复制 `app assets patches payload plugin profile scripts docs` + `README/THIRD_PARTY/.gitignore/CHANGELOG` + `VERSION ROOTFS_VERSION update.json HOT`；`git clean -qXfd`；`git config core.createObject rename`（PRoot link2symlink 会把 git 的硬链接对象变悬空软链）；`git add -A` → commit → **`git push origin main`（SSH）** |
 | `scripts/make_hot_zip.py` | 热包打包 + sp 计算 + 写 `HOT`；白名单前缀见 §5.4 |
 | `scripts/make_update_manifest.py` | 由 `VERSION`/`ROOTFS_VERSION`/热包生成 `update.json` |
-| `scripts/release_notes.py` | 从 `CHANGELOG.md` 渲染正文（`--channel app|hot-history`） |
+| `scripts/release_notes.py` | 从 `CHANGELOG.md` 渲染正文（`--channel app|hot-history`）。**热包要按三段式写**（`[1.2.0-t2-sp1]`）：它按 `<app>-` 前缀 + `-sp<N>` 尾部匹配（也认旧的 `<app>-sp<n>`）—— 以前写死 `<app>-sp` 前缀，三段式一个都匹配不到，`release_hot.sh`（它就是用 `--channel hot-history` 生成正文，见 `release_hot.sh:57`）会把 release 正文 PATCH 成 `<!-- no hot package published for 1.2.0 yet -->`。回归测试：`python3 docs/release-notes-test.py`（7 checks：正例/负例/两个通道） |
 | `scripts/_release_lock.sh` | `out/release.lock` 互斥 |
 
 ### 3.3 鉴权（✅只读探测；**绝不打印明文**）
