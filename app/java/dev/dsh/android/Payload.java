@@ -644,6 +644,18 @@ public final class Payload {
         try (OutputStream out = new FileOutputStream(marker)) {
             out.write(version.getBytes(StandardCharsets.UTF_8));
         }
+        // Drop markers of runtimes this extraction just replaced. isBundledReady()
+        // only accepts the current payload's marker, so leftovers are harmless — but
+        // they accumulate, and a stale marker is what made "some runtime exists" look
+        // like "the right runtime is installed".
+        File[] stale = home.listFiles((dir, name) ->
+                name.startsWith(".payload-") && !name.equals(marker.getName()));
+        if (stale != null) {
+            for (File old : stale) {
+                //noinspection ResultOfMethodCallIgnored
+                old.delete();
+            }
+        }
         //noinspection ResultOfMethodCallIgnored
         stagedZip.delete();
     }

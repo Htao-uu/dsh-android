@@ -228,6 +228,35 @@ curl -sSI -L "https://github.com/itiswdwa/dsh-android/releases/latest/download/d
 3. ✅验证：`javac -source 8 -target 8`（android.jar android-36）**exit 0，52 个 class**；`HotVersion` 纯 JVM 决策表 **31 checks / 0 failures**（含 "sp2 over baked sp0 重放"、"早于 APK 的 sp9 丢弃"、"t3 拒绝"、无 sp 回退、相等丢弃）。
 4. ❓**仍未验证的**：真机行为（"应用 sp2 → 重启 → 仍是 sp2 内容"）必须在装上新 APK 后实测：`ball`… 不适用；步骤见 §10.6。App 私有目录存档 + pref 是纯 Java 逻辑，我无法在沙箱里跑 Android 运行时。
 
+### 4.1b 运行时"已就绪"判断的 bug（2026-10-14 发现并修复）
+**症状**：装了新的全量 APK，运行时**完全没更新** —— `/opt/dsh/**`、`/usr/local/bin/node` 的 mtime 还停留在
+上一次解包（本机是 `2026-09-30 03:21`），只有热包白名单里的文件是新时间戳。
+**根因**（✅代码 + 现场证据）：
+```java
+// 旧 App.isBundledReady()：任意 .payload-* 标记都算"就绪"
+for (String name : markers) if (name.startsWith(".payload-")) return true;
+// Payload.install() 第一行就是：
+if (app.isBundledReady()) return;      // ← 于是新 APK 的载荷永远不会解包
+```
+现场：运行时目录里的标记是 `/.payload-d85c0d22da47889f`（1.1.5 时代解包留下的，Sep 30），
+而新 APK 的 `BuildInfo.PAYLOAD_VERSION=a9001b8ed364b544` → 标记不匹配本该解包，却因为"任意标记即就绪"被跳过。
+**连带后果**：①"预装 pnpm"在**任何已有运行时的设备**上都不会生效（本机 `/usr/local/bin/pnpm` 至今是
+Oct-12 手工装的 29 字节软链，只是因为内容恰好相同才没暴露）；②整个 t 线（运行时）更新模型对老设备失效。
+**修法**（本轮）：
+- 新增 `app/java/dev/dsh/android/PayloadMarker.java`（纯函数，无 Android 依赖）：**全量壳只认自己那份载荷的
+  标记** `.payload-<PAYLOAD_VERSION>`；**瘦包壳**没有载荷，保持宽松（任意标记即就绪，因为它的运行时是下载来的）。
+- `App.isBundledReady()` 改为调用它；`Payload.unpack()` 成功写入新标记后**清理其它旧标记**。
+- 解包本身不需要改：它先 `clearLink(target)` 再写文件，所以旧软链会被替换成真文件 ✓（这一点已读码确认）。
+**验证**：`javac` 全量编译通过（53 个 class）；`PayloadMarker` 决策表 **15 checks / 0 failures**
+（含回归用例"全量 APK + 别人的标记 ⇒ 不就绪，必须解包"、瘦包宽松用例）；`HotVersion` 31 checks 仍全过。
+**证据（修复后的产物）**：新全量包 `out/dsh-android.apk`
+sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,982,190 B，
+`BuildInfo.PAYLOAD_VERSION=8e6597008d91cf51`，其 `assets/payload.zip`（212,245,549 B）里**两份**种子市场的
+`client.js` md5 都是 `d6bb2e46139ebbd3b217bc8efbd562bc`（新版）；新旧 payload 逐条目对比：条目集合完全一致
+（25,892），**只有 6 个条目不同**（两处 `@local/dsh-market` 的 README/client.js/test）✓。
+❓待真机验证：装这份新全量包后应触发一次完整解包（进度条），随后 `/usr/local/bin/pnpm` 变成**单文件**
+43,403,704 B / md5 `f20469f02b54169cc9ed50abb5b80b7f`，且 `/.payload-*` 只剩新的那一个。
+
 ### 4.2 悬浮球 overlay 窗口（🔶球线素材）
 单窗口形变方案（收起=球矩形/展开=条/气泡=自适应矩形）+ `dsh-ball-visual` 空壳层；"不可触摸"约束（visual 层不接收触摸，交互在 bar 层）。待决策：`dsh-ball-visual` 空壳是否删除。
 

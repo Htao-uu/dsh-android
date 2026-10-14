@@ -21,6 +21,7 @@ EXPECT_PKG_HOT=1.2.0-t2-sp0 # APK 内建热包（build_apk.sh 用 --base，恒 s
 EXPECT_HOT=1.2.0-t2-sp1     # 本版发布的热包（devices 应用后应看到它）
 EXPECT_MARKET_MD5=d6bb2e46139ebbd3b217bc8efbd562bc   # @local/dsh-market/client.js
 EXPECT_PNPM=12.11.2
+EXPECT_PNPM_MD5=f20469f02b54169cc9ed50abb5b80b7f  # 载荷里那份二进制的 md5（解开软链后算）
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -100,25 +101,42 @@ esac
 
 # --- 3. pnpm -----------------------------------------------------------------
 head1 "3. pnpm（只有全量包或重下过 runtime 才有）"
-PNPM_PATH=$(command -v pnpm 2>/dev/null || true)
-PNPM_VER=$([ -n "$PNPM_PATH" ] && pnpm -v 2>/dev/null | head -1 || true)
-printf '  命令：command -v pnpm && pnpm -v\n  实际：path=%s version=%s\n' "${PNPM_PATH:-<无>}" "${PNPM_VER:-<无>}"
-printf '  关键前提：pnpm 被热包**排除**（HOT_EXCLUDED），所以它只可能来自载荷；\n'
-printf '            而只剩包(slim)不会重下 runtime ⇒ 瘦包升级的机器本来就不该有它。\n'
+PNPM_LINK=$(command -v pnpm 2>/dev/null || true)
+PNPM_FORM="缺失"
+PNPM_SIZE=""
+PNPM_MD5=""
+if [ -n "$PNPM_LINK" ]; then
+  if [ -L "$PNPM_LINK" ]; then PNPM_FORM="软链（旧形态/手工装）"; else PNPM_FORM="单文件（载荷形态）"; fi
+  PNPM_SIZE=$(stat -Lc %s "$PNPM_LINK" 2>/dev/null || echo "?")
+  PNPM_MD5=$(md5sum "$PNPM_LINK" 2>/dev/null | cut -d' ' -f1)
+fi
+PNPM_VER=$([ -n "$PNPM_LINK" ] && pnpm -v 2>/dev/null | head -1 || true)
+printf '  命令：command -v pnpm && pnpm -v && md5sum $(command -v pnpm) && ls -l $(command -v pnpm)\n'
+printf '  实际：path=%s\n        form=%s  size=%s bytes  md5=%s  version=%s\n' \
+  "${PNPM_LINK:-<无>}" "$PNPM_FORM" "${PNPM_SIZE:-}" "${PNPM_MD5:-<无>}" "${PNPM_VER:-<无>}"
+printf '  期望：单文件（非软链）· 43,403,704 bytes · md5=%s · pnpm -v = %s\n' "$EXPECT_PNPM_MD5" "$EXPECT_PNPM"
+printf '  关键前提：pnpm 被热包**排除**（HOT_EXCLUDED），只能来自载荷；而载荷只在\n'
+printf '            "磁盘上的运行时不是本 APK 自带的那份" 时才会解包（PayloadMarker）。\n'
 printf '            payloadBundled=%s ⇒ %s\n' "$PAYLOAD_BUNDLED" \
   "$([ "$PAYLOAD_BUNDLED" = "True" ] || [ "$PAYLOAD_BUNDLED" = "true" ] && echo '全量包（自带载荷）' || echo '瘦包（无载荷，靠下载 runtime）')"
-if [ "$PNPM_VER" = "$EXPECT_PNPM" ]; then
+if [ "$PNPM_MD5" = "$EXPECT_PNPM_MD5" ] && [ "$PNPM_FORM" = "单文件（载荷形态）" ] && [ "$PNPM_VER" = "$EXPECT_PNPM" ]; then
+  pass "pnpm 是载荷那份（单文件、md5 与大小都对）"
+elif [ "$PNPM_MD5" = "$EXPECT_PNPM_MD5" ] && [ "$PNPM_FORM" = "软链（旧形态/手工装）" ]; then
+  fail "pnpm 内容对但形态是软链（旧形态/手工装），说明载荷没有覆盖它" \
+       "单文件 43,403,704 bytes（载荷解包后 clearLink 会把软链换成真文件）" \
+       "$PNPM_LINK -> $(readlink "$PNPM_LINK" 2>/dev/null)  size=$(stat -c %s "$PNPM_LINK" 2>/dev/null) bytes"
+  printf '         失败请贴：ls -l %s；ls -lL %s；ls -la /.payload-*；shiz dumpsys package %s | grep -E "versionName|versionCode"\n' \
+    "$PNPM_LINK" "$PNPM_LINK" "$PKG"
+elif [ -z "$PNPM_LINK" ]; then
   if [ "$PAYLOAD_BUNDLED" = "True" ] || [ "$PAYLOAD_BUNDLED" = "true" ]; then
-    pass "pnpm $EXPECT_PNPM 已预装（$PNPM_PATH），且本机是全量包 ⇒ 只可能来自载荷"
+    fail "全量包已装但 pnpm 不在" "/usr/local/bin/pnpm 存在" "找不到（看 /.payload-* 标记与解包日志）"
   else
-    skip "pnpm 存在但是 $PNPM_PATH（本机是瘦包安装）" "瘦包不重下 runtime，这条不能证明载荷带上了 pnpm；若这台的 pnpm 是评测前手工装的，属预期之外。要确认请装 dsh-android.apk（全量包，~197MB）后重跑"
+    skip "pnpm 不在（本机是瘦包安装）" "已知限制：pnpm 随运行时包发；瘦包升级不会重下 payload。要 pnpm 请装 dsh-android.apk（全量包，~197 MB）"
   fi
-elif [ "$PAYLOAD_BUNDLED" = "True" ] || [ "$PAYLOAD_BUNDLED" = "true" ]; then
-  fail "全量包已装但 pnpm 不在" "/usr/local/bin/pnpm 存在且 pnpm -v = $EXPECT_PNPM" "path=${PNPM_PATH:-<无>} version=${PNPM_VER:-<无>}（顺带看载荷是否真的解包成功）"
-elif [ -z "$PNPM_PATH" ]; then
-  skip "pnpm 不在（本机是瘦包安装）" "已知限制：pnpm 随运行时包（payload）发；瘦包升级不会重下 payload。要 pnpm 请装 dsh-android.apk（全量包，~197MB）"
-else
+elif [ "$PNPM_VER" != "$EXPECT_PNPM" ]; then
   fail "pnpm 版本不对" "$EXPECT_PNPM" "$PNPM_VER"
+else
+  fail "pnpm 内容对不上载荷那份" "md5=$EXPECT_PNPM_MD5" "md5=${PNPM_MD5:-<无>} form=$PNPM_FORM"
 fi
 
 # --- 4. applyHot 重放（六步 + 反向用例） -------------------------------------
@@ -130,7 +148,7 @@ for f in "$SCRIPT_DIR/../plugin/dsh-plugin-android/lib/client.js" \
   [ -f "$f" ] && printf '    %s  %s\n' "$(md5sum "$f" | cut -d' ' -f1)" "$f"
 done
 manual "热包重放（正向用例）" \
-"① 设置 → 安卓沙箱 → 检查更新 → 应用热更新（$EXPECT_HOT）；② 记下上面 profile 那份 client.js 的 md5=A；③ 从最近任务里划掉 App（完全退出）再打开；④ 再算一次 md5，应仍=A；⑤ 看 /snapshot 的 hotVersion 仍=$EXPECT_HOT；⑥ 日志里应有 hot replay: re-applied" \
+"① 设置 → 安卓沙箱 → 检查更新 → **应用热更新**（$EXPECT_HOT）—— 注意：热包不会自动应用，必须点这一下；② 记下上面 profile 那份 client.js 的 md5=A；③ 从最近任务里划掉 App（完全退出）再打开；④ 再算一次 md5，应仍=A；⑤ 看 /snapshot 的 hotVersion 仍=$EXPECT_HOT；⑥ 日志里应有 hot replay: re-applied" \
 "④ md5 不变；⑤ 仍是 sp1；⑥ 日志见 hot replay: re-applied"
 manual "热包重放（反向用例：装新 APK 后应丢弃更旧的热包）" \
 "用一份比 APK 内建更旧的热包重复上面流程（或直接看装完新 APK 的首次启动日志）" \

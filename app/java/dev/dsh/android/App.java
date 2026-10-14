@@ -246,20 +246,20 @@ public final class App extends Application {
     }
 
     /**
-     * Has the runtime been unpacked?
+     * Has the runtime been unpacked — and is it the one this shell should use?
      *
-     * Any `.payload-*` marker counts, not just this build's own: the slim shell
-     * carries no payload at all, so its runtime arrives by download (or by the
-     * import flow) and is marked with whatever it identifies itself as.
+     * A full shell ships a payload, so only that payload's own `.payload-<version>`
+     * marker counts: otherwise an app update would leave the previous runtime in
+     * place forever (that is how a hand-installed `pnpm` survived, and how new
+     * payload contents silently never arrived). A slim shell carries no payload: its
+     * runtime arrives by download (`t<terminal>`) or by import, so any marker counts.
      */
     public boolean isBundledReady() {
         File home = bundledHome();
         String[] markers = home.isDirectory() ? home.list() : null;
         if (markers == null) return false;
-        for (String name : markers) {
-            if (name.startsWith(".payload-")) return true;
-        }
-        return false;
+        return PayloadMarker.isReady(markers, Payload.hasBundledPayload(this),
+                BuildInfo.PAYLOAD_VERSION, BuildInfo.ROOTFS_VERSION);
     }
 
     /** True once the user has granted the legacy read/write permission. */
