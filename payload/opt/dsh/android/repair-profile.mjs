@@ -35,9 +35,24 @@ const seedProfile = join(seed, "profiles", "web");
  * `payload/home/.dsh/profiles/web/node_modules/@local/`.
  */
 const BUNDLES = {
+	"dshmarket": "file:./node_modules/dshmarket",
 	"@local/agent-browser-viewer": "file:./node_modules/@local/agent-browser-viewer",
-	"@local/dsh-ball-summarizer": "file:./node_modules/@local/dsh-ball-summarizer",
-	"@local/dsh-market": "file:./node_modules/@local/dsh-market"
+	"@local/dsh-ball-summarizer": "file:./node_modules/@local/dsh-ball-summarizer"
+};
+
+/**
+ * Rows that used to ship and no longer do: `retired -> replacement`.
+ *
+ * Only the *bundle* row is dropped — the dependency row and the directory stay, so
+ * the change is reversible by hand (put the name back into `dsh.profile.bundles`) and
+ * nothing the user might have edited is deleted. The self-built market was replaced
+ * by the public npm package `dshmarket` (see THIRD_PARTY.md), and we only drop the
+ * old row once the replacement is actually in place: if `dshmarket` cannot be added
+ * (missing files, unparsable profile), the old row is left exactly as it was — a
+ * device with a working market beats a tidy bundle list.
+ */
+const RETIRED = {
+	"@local/dsh-market": "dshmarket"
 };
 
 /** The patch row the app's settings page and terminal button live behind. */
@@ -47,6 +62,18 @@ let changed = 0;
 
 function log(line) {
 	console.log(`repair-profile: ${line}`);
+}
+
+/**
+ * Is this bundle's package actually on disk?
+ *
+ * A row without files is worse than a missing row: the loader fails on the whole
+ * bundle and the user loses the feature (the market tab, say) with no way to tell
+ * why. The hot overlay writes these packages, so the check also makes the repair
+ * self-healing - the row lands on the next boot after the files arrive.
+ */
+function installed(name) {
+	return existsSync(join(profile, "node_modules", name, "package.json"));
 }
 
 /** Copy a seed file in place when the guest has none. */
@@ -90,10 +117,28 @@ function repairPackageJson() {
 			log(`added dependency ${name}`);
 		}
 		if (!bundles.includes(name)) {
+			if (!installed(name)) {
+				log(`skipped bundle ${name}: package not on disk yet`);
+				continue;
+			}
 			bundles.push(name);
 			touched = true;
 			log(`added bundle ${name}`);
 		}
+	}
+	// Retire rows that no longer ship — but only when the replacement is present,
+	// and only the bundle row (the dependency row and the directory stay, so the
+	// user can undo this by hand; see RETIRED).
+	for (const [old, replacement] of Object.entries(RETIRED)) {
+		if (!bundles.includes(old)) continue;
+		if (!bundles.includes(replacement) || !installed(replacement)) {
+			log(`kept retired ${old}: replacement ${replacement} is not ready`
+				+ (installed(replacement) ? "" : " (package not on disk)"));
+			continue;
+		}
+		profileSection.bundles = bundles.filter((row) => row !== old);
+		touched = true;
+		log(`retired bundle row ${old} (replaced by ${replacement}; dependency row and files kept)`);
 	}
 	if (!touched) return;
 	// Re-serialising keeps every existing key and value; only the missing rows

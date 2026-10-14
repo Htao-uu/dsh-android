@@ -60,11 +60,29 @@ cp -a "$ROOT/profile/." "$SEED/profiles/web/"
 # Remove anything a previous build left behind: a stale copy here would shadow
 # the hot overlay's, and make the payload depend on the plugin again.
 rm -rf "$ROOTFS/opt/dsh/dsh-plugin-android" "$SEED/profiles/web/node_modules/dsh-plugin-android"
+# The self-built market was replaced by the public npm package `dshmarket`; the
+# overlay above only *merges*, so a copy left by an earlier build would still be
+# shipped (and its cordis.patch.yml registers the same loader row id `dsh-market`
+# as the public package, which collides). Drop it here, the same way the plugin is
+# dropped, and assert below that nothing brought it back.
+rm -rf "$ROOTFS/opt/dsh/dsh-home-seed/.dsh/profiles/web/node_modules/@local/dsh-market" \
+       "$SEED/profiles/web/node_modules/@local/dsh-market"
 
 echo "== dsh source patches =="
 python3 "$ROOT/patches/apply-hardlink-patch.py" "$ROOTFS/opt/dsh/node_modules"
 
 echo "== sanity =="
+# Retired bundle names must not ship (see the rm above), and the replacements must.
+for gone in "@local/dsh-market"; do
+  if [ -e "$SEED/.dsh/profiles/web/node_modules/$gone" ] || [ -e "$SEED/profiles/web/node_modules/$gone" ]; then
+    echo "RETIRED PACKAGE STILL IN PAYLOAD: $gone" >&2
+    exit 1
+  fi
+done
+if [ ! -f "$SEED/.dsh/profiles/web/node_modules/dshmarket/package.json" ]; then
+  echo "MISSING payload package: dshmarket" >&2
+  exit 1
+fi
 for f in opt/dsh/android/pty-server.mjs \
          opt/dsh/android/start-dsh.sh \
          opt/dsh/node_modules/node-pty/prebuilds/linux-arm64/pty.node \

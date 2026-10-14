@@ -381,6 +381,36 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
   5. **装 app 类 bundle 会改变 CLI 的参数面**：在 web profile 里装上 `@deepseek-ai/dsh-acp-app` 之后，
      `dsh web --no-open` 会报 `unknown option '--no-open'` —— 用原 argv 重启会起不来。`start-dsh.sh` 不带这些 flag，
      现网不受影响；**以后若做"装完自动重启"，不要照抄原 argv**。
+- **市场改用公开包（2026-10-14，Lead 拍板；热包 `1.2.0-t2-sp2`）**：预装的是 npm 上的 **`dshmarket`**
+  而不是我们自建的 `@local/dsh-market`。
+  - **vendor**：`payload/home/.dsh/profiles/web/node_modules/dshmarket/`（1.66.21，177 文件）+ 它的运行时依赖
+    `undici@7.30.0` / `js-yaml@4.3.2` / `argparse@2.0.1`（真文件、非软链；每个 tarball 都按 npm 的
+    `dist.integrity`(sha512) 校验过，tarball sha256 记在 `THIRD_PARTY.md`）。**安装时不联网**。
+  - **profile**：`profile/package.json` 依赖用 `"dshmarket": "file:./node_modules/dshmarket"`，
+    `dsh.profile.bundles` 里是 `dshmarket`；`@local/dsh-market` 的依赖行与 bundle 行都已移除。
+  - **老设备迁移**（`repair-profile.mjs`）：新增 `dshmarket` 的依赖行与 bundle 行；把 `@local/dsh-market` 的
+    **bundle 行**去掉（**只改行**：依赖行与 `node_modules/@local/dsh-market/` 目录都保留，可手工回退）。
+    **保守规则**：只有当 `dshmarket` 的 `package.json` **真的在磁盘上**时才加它的行、也才退役旧行
+    —— 否则原样不动（"能用但列表不整洁" 好过 "列表整洁但市场没了"）。这依赖热包先落地，所以迁移是自愈的：
+    文件到了的下一次启动才生效。**两行同 id 会撞车**：自建包的 patch 行 id 与公开包一样都是 `dsh-market`，
+    所以"两个 bundle 同时在"这种状态必须避免 —— 这正是退役旧行是硬要求的原因（作者确认）。
+  - **回退**：把 `@local/dsh-market` 加回 `dsh.profile.bundles`（文件都还在）→ 下次启动 `repair-profile`
+    又不会退役它（因为退役只在"旧行在 + 新包在"时才做 ✗ 嗯：那它会再次退役 ✗ —— 真回退要同时把
+    `dshmarket` 从 bundles 里去掉，或者直接改 `BUNDLES`/`RETIRED` 常量）。**注意别在发行版里同时挂两个**。
+  - **产物卫生**：`assemble_payload.sh` 现在会 `rm -rf` 掉 seed 里的 `@local/dsh-market` 并**断言**
+    它不在、且 `dshmarket/package.json` 在（overlay 是"合并"不是"替换"，老构建留在
+    `build/rootfs*` 里的旧包会被悄悄带上 —— 作者提醒的坑，已用断言兜住）。
+  - **验证**（都在隔离环境，没碰用户实例）：`--dump-config` → **0 处 skipping**，合成结果里有
+    `- id: dsh-market / name: dshmarket`（**只有一行**）；临时 `DSH_HOME` + 端口 3188 起隔离实例 →
+    `GET /dsh-market/api/v1/capabilities` = **200**，正文含 `"marketVersion":"1.66.21"`；
+    `GET /dsh-market/api/v1/updates/summary` = 200（`{"checked":4,"updatable":0}`）；
+    不带会话时是 401（鉴权栅栏 ✓）。离线用例：`node docs/repair-profile-test.mjs` → **24 checks / 0 failures**
+    （只有公开包 / 两者都在 / 只有自建 / 文件缺失的保守路径 / 坏 JSON 五种情形）。
+  - **风险（如实记录）**：① 公开包声明 `@deepseek-ai/dsh-settings` 的 peer 范围与本机 `0.1.7-rc.2` **不满足**
+    （作者用 semver 实测 `satisfies=false`）—— 但隔离实例上**没有任何 peer 报错、也没被兼容性自检拒绝**，
+    capabilities 正常响应；真机再确认一次；② 它默认访问第三方站点（见 `THIRD_PARTY.md` 的说明）；
+    ③ 体积：payload 212.2MB → **216.7MB**，热包 559KB → **2.75MB**；④ `tar xzf` 在这台沙箱里建不了目录
+    （作者遇到；我这次没遇到 —— 用 `tar xzO` 或 node 解包更稳）。
 - ❓**待重启验证**（作者明确：新增 bundle **不会**被运行中的 `dsh web` 热加载，刷新页面也不够）：右侧栏出现「插件市场」标签页、`GET /dsh-market/catalog` 返回目录、从市场里真装一个插件生效、失败路径的可读报错。
 
 ### 5.4 热包白名单（✅`make_hot_zip.py` + `Payload.HOT_ALLOWED_PREFIXES`）
