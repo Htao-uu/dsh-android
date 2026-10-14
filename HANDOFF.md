@@ -261,6 +261,17 @@ curl -sSI -L "https://github.com/itiswdwa/dsh-android/releases/latest/download/d
   `"@local/<name>": "file:./node_modules/@local/<name>"` 三条 + 并入 `dsh.profile.bundles`。
   ✅验证（2026-10-14）：临时 profile（仓库 `profile/*` + payload 三个包 + `dsh-plugin-android`）跑 `DSH_HOME=/tmp/handoff-home … dsh web --dump-config` → **exit 0，skipping/skip/cannot resolve/error 命中数 = 0**，输出里有 `- id: dsh-market / name: '@local/dsh-market'`（config `online: true`、`searchText: keywords:dsh-plugin`）与 `- id: android-sandbox`；Node 解析四个包全部 `resolved`。故意删一个包时 loader 只打印 `skipping profile bundle … cannot resolve` 并继续（exit 0，**不会 brick**）。
 - **老设备**由 `repair-profile.mjs` 的 `BUNDLES` 表补（三条，见 §6.2）；热包自动带这三个包（实测 8 + 7 + 6 个文件会进包）。
+- **插件市场的 5 条真机教训**（🔶作者在隔离实例上实测：临时 `DSH_HOME` + 3177 端口，没碰在跑的 3080；证据截图在
+  `/mnt/Documents/dsh-plugins/dsh-market-evidence/`。离线用例覆盖不到的坑，写客户端插件的人都会踩）：
+  1. **`inject` 里光写 `remote` 不够，命名空间也要写**：`remote` 提供网关，但 `remote.pluginManager` 这个**名字**
+     也要在 `inject` 里，否则网关拒绝该名字 —— 页面能渲染，**34 个按钮全变 disabled**（最难查的一种失败）。
+  2. **Remote 返回的是信封**：成功 `{ok: true, value}`、失败 `{ok: false, error: {code, diagnostic}}`。当成数组用会
+     `bundles.map is not a function` → React 卸载整棵子树 → **面板空白且没有任何报错**。
+  3. **`meta.description` 可能是 `{en, zh}` 对象**：直接当 React child 会抛 **React error #31**，同样白屏。
+  4. **所以必须加错误边界**：把任何渲染异常变成面板里一句可读的话（第 3 条正是被它抓出来的）。
+  5. **装 app 类 bundle 会改变 CLI 的参数面**：在 web profile 里装上 `@deepseek-ai/dsh-acp-app` 之后，
+     `dsh web --no-open` 会报 `unknown option '--no-open'` —— 用原 argv 重启会起不来。`start-dsh.sh` 不带这些 flag，
+     现网不受影响；**以后若做"装完自动重启"，不要照抄原 argv**。
 - ❓**待重启验证**（作者明确：新增 bundle **不会**被运行中的 `dsh web` 热加载，刷新页面也不够）：右侧栏出现「插件市场」标签页、`GET /dsh-market/catalog` 返回目录、从市场里真装一个插件生效、失败路径的可读报错。
 
 ### 5.4 热包白名单（✅`make_hot_zip.py` + `Payload.HOT_ALLOWED_PREFIXES`）

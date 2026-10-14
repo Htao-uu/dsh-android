@@ -24,6 +24,11 @@ app/res/values-night/icon_background.xml
 
 # 依赖与临时物
 node_modules/
+
+# 载荷里预装的 @local 插件是发行内容，必须进 git —— 上一行的 node_modules/ 会连它们一起忽略，
+# 结果是"工作树有、仓库没有"：本地出包正常（打包读工作树），但 CI/新克隆出的载荷会缺这三个插件。
+!payload/home/.dsh/profiles/web/node_modules/
+!payload/home/.dsh/profiles/web/node_modules/**
 *.log
 .DS_Store
 
