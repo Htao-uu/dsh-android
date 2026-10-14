@@ -7,8 +7,9 @@
 #
 # What it restores:
 #   apt     JDK 21 (javac/keytool), librsvg2-bin (icons), python3-pil (render_icon),
-#           gcc (build_linkfix), qemu-user-static + the x86_64 cross loader/libgcc
-#           (aapt2 is an x86_64 binary), python3-yaml (workflow lint)
+#           qemu-user + the x86_64 cross loader/libgcc (aapt2 is an x86_64 binary),
+#           python3-yaml (workflow lint). gcc only if build_linkfix needs to rebuild
+#           (qemu-user-static is ~100MB more for no gain here).
 #   /tmp    android.jar (platform 36), r8.jar (d8), apksig.jar, aapt2
 #   /opt/android/root64   the QEMU_LD_PREFIX tree build_apk.sh expects
 #
@@ -43,7 +44,7 @@ PY
 echo "== apt 安装（JDK / librsvg / PIL / gcc / qemu / 交叉 libc / yaml）"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=8 -y install \
-  openjdk-21-jdk-headless librsvg2-bin python3-pil gcc qemu-user-static \
+  openjdk-21-jdk-headless librsvg2-bin python3-pil qemu-user \
   libc6-amd64-cross libgcc-s1-amd64-cross python3-yaml >/dev/null
 
 echo "== 安卓 SDK 组件（JAR/二进制，都是 /tmp 里的）"
