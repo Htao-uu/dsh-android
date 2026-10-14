@@ -497,16 +497,41 @@ public final class Payload {
     public static void install(Context ctx, Progress progress) throws IOException {
         App app = App.i();
         if (app.isBundledReady()) return;
+        UnpackPlan plan = new UnpackPlan();
+        long startedAt = android.os.SystemClock.uptimeMillis();
+        int[] callbacks = {0};
 
         // java.util.zip needs a real file, and a staged copy also lets us verify
         // the byte count instead of trusting an asset stream.
+        //
+        // The copy is the long silent stretch (207 MB out of the APK): it used to
+        // report nothing, which is why the progress bar looked frozen before the
+        // first entry was even read.
         File staged = new File(app.tmpDir, ASSET);
-        long copied;
+        long announced = assetLength(ctx);
+        long copied = 0;
         try (InputStream raw = ctx.getAssets().open(ASSET);
              OutputStream out = new FileOutputStream(staged)) {
-            copied = copy(raw, out, null);
+            byte[] buffer = new byte[1 << 16];
+            int read;
+            while ((read = raw.read(buffer)) > 0) {
+                out.write(buffer, 0, read);
+                copied += read;
+                // Count in 64 KB blocks: UnpackPlan's "entries" floor is 200, and
+                // passing raw bytes would fire a callback on every read().
+                if (plan.due(android.os.SystemClock.uptimeMillis(), copied >> 16, false)) {
+                    report(progress, callbacks, UnpackPlan.permille(copied, announced),
+                            UnpackPlan.label(UnpackPlan.Phase.STAGE, copied, announced));
+                }
+            }
         }
-        App.log("payload staged: " + copied + " bytes");
+        App.log("payload staged: " + copied + " bytes in "
+                + (android.os.SystemClock.uptimeMillis() - startedAt) + "ms ("
+                + callbacks[0] + " progress callbacks)");
+        // Final staging report with its own ratio (not 100%: the next phase starts a
+        // new denominator, and a bar that slams to full then restarts reads as a bug).
+        report(progress, callbacks, UnpackPlan.permille(copied, announced),
+                UnpackPlan.label(UnpackPlan.Phase.STAGE, copied, announced));
         if (copied < 4096) {
             throw new IOException("payload asset looks empty (" + copied + " bytes)");
         }
@@ -515,7 +540,24 @@ public final class Payload {
              OutputStream out = new FileOutputStream(manifest)) {
             copy(raw, out, null);
         }
-        unpack(ctx, app.bundledHome(), staged, manifest, App.PAYLOAD_VERSION, progress);
+        unpack(ctx, app.bundledHome(), staged, manifest, App.PAYLOAD_VERSION, progress, plan,
+                startedAt, callbacks);
+    }
+
+    /** Declared size of a bundled asset, or -1 when the platform will not say. */
+    private static long assetLength(Context ctx) {
+        try (android.content.res.AssetFileDescriptor fd = ctx.getAssets().openFd(ASSET)) {
+            return fd.getLength();
+        } catch (IOException error) {
+            return -1;
+        }
+    }
+
+    /** One progress callback, counting them for the install log. */
+    private static void report(Progress progress, int[] callbacks, int permille, String label) {
+        if (progress == null) return;
+        callbacks[0]++;
+        progress.onProgress(permille, 1000, label);
     }
 
     // ------------------------------------------------- terminal, pulled on demand
@@ -592,20 +634,32 @@ public final class Payload {
     /** Extract a staged payload + manifest into the distro home. */
     private static void unpack(Context ctx, File home, File stagedZip, File stagedManifest,
                                String version, Progress progress) throws IOException {
+        unpack(ctx, home, stagedZip, stagedManifest, version, progress, new UnpackPlan(),
+                android.os.SystemClock.uptimeMillis(), new int[1]);
+    }
+
+    /**
+     * The real thing: phased, paced reporting so the install screen never looks
+     * frozen (staging copy → extraction with entry counts → manifest → done).
+     */
+    private static void unpack(Context ctx, File home, File stagedZip, File stagedManifest,
+                               String version, Progress progress, UnpackPlan plan,
+                               long startedAt, int[] callbacks) throws IOException {
         deleteTree(home);
         if (!home.mkdirs() && !home.isDirectory()) {
             throw new IOException("cannot create " + home);
         }
         try (ZipFile zip = new ZipFile(stagedZip)) {
-            long total = 0;
-            for (Enumeration<? extends ZipEntry> scan = zip.entries(); scan.hasMoreElements(); ) {
-                total += Math.max(1, scan.nextElement().getCompressedSize());
-            }
-            long done = 0;
-            int files = 0;
+            long totalEntries = zip.size();
+            plan.enter(UnpackPlan.Phase.EXTRACT);
+            long extractStart = android.os.SystemClock.uptimeMillis();
+            int files = 0;   // real files, for the log (matches "payload extracted: N files")
+            int seen = 0;    // every entry, including directories — zip.size() counts those too,
+                             // so this is what keeps the bar able to reach 100%
             for (Enumeration<? extends ZipEntry> entries = zip.entries(); entries.hasMoreElements(); ) {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName();
+                seen++;
                 File target = new File(home, name);
                 if (!name.equals(".") && !name.equals("./")) {
                     if (!isInside(home, target)) {
@@ -630,15 +684,27 @@ public final class Payload {
                         throw error;
                     }
                 }
-                done += Math.max(1, entry.getCompressedSize());
-                if (progress != null && (files & 0x1f) == 0) {
-                    progress.onProgress(done, total, name);
+                if (plan.due(android.os.SystemClock.uptimeMillis(), seen, false)) {
+                    report(progress, callbacks, UnpackPlan.permille(seen, totalEntries),
+                            UnpackPlan.label(UnpackPlan.Phase.EXTRACT, seen, totalEntries));
                 }
             }
-            App.log("payload extracted: " + files + " files");
-        }
+            long extractMs = android.os.SystemClock.uptimeMillis() - extractStart;
+            App.log("payload extracted: " + files + " files in " + extractMs + "ms ("
+                    + callbacks[0] + " progress callbacks so far)");
+            report(progress, callbacks, 1000,
+                    UnpackPlan.label(UnpackPlan.Phase.EXTRACT, seen, totalEntries));
 
-        applyManifest(stagedManifest, home);
+            plan.enter(UnpackPlan.Phase.MANIFEST);
+            report(progress, callbacks, -1, UnpackPlan.label(UnpackPlan.Phase.MANIFEST, 0, 0));
+            long manifestStart = android.os.SystemClock.uptimeMillis();
+            int[] manifestCounts = applyManifest(stagedManifest, home);
+            App.log("payload manifest applied: " + manifestCounts[0] + " symlinks, "
+                    + manifestCounts[1] + " modes in "
+                    + (android.os.SystemClock.uptimeMillis() - manifestStart) + "ms");
+            report(progress, callbacks, 1000, UnpackPlan.label(UnpackPlan.Phase.MANIFEST,
+                    manifestCounts[0], manifestCounts[1]));
+        }
         writeResolvConf(home);
         File marker = new File(home, ".payload-" + version);
         try (OutputStream out = new FileOutputStream(marker)) {
@@ -658,6 +724,11 @@ public final class Payload {
         }
         //noinspection ResultOfMethodCallIgnored
         stagedZip.delete();
+        plan.enter(UnpackPlan.Phase.DONE);
+        report(progress, callbacks, 1000, UnpackPlan.label(UnpackPlan.Phase.DONE, 0, 0));
+        App.log("payload install finished in "
+                + (android.os.SystemClock.uptimeMillis() - startedAt) + "ms ("
+                + callbacks[0] + " progress callbacks total)");
     }
 
     /**
@@ -665,7 +736,7 @@ public final class Payload {
      * manifest marks as symlinks into real ones. The zip wrote them as small
      * files holding their target path, which is exactly the data needed here.
      */
-    private static void applyManifest(File manifest, File home) throws IOException {
+    private static int[] applyManifest(File manifest, File home) throws IOException {
         int links = 0;
         int modes = 0;
         try (InputStream raw = new FileInputStream(manifest);
@@ -703,7 +774,7 @@ public final class Payload {
                 }
             }
         }
-        App.log("payload manifest applied: " + links + " symlinks, " + modes + " modes");
+        return new int[]{links, modes};
     }
 
     private static long copy(InputStream in, OutputStream out, Progress progress) throws IOException {

@@ -260,6 +260,50 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
 ❓待真机验证：装这份新全量包后应触发一次完整解包（进度条），随后 `/usr/local/bin/pnpm` 变成**单文件**
 43,403,704 B / md5 `f20469f02b54169cc9ed50abb5b80b7f`，且 `/.payload-*` 只剩新的那一个。
 
+### 4.1c 安装进度 UI（2026-10-14 修：进度条看着不动）
+**用户报的现象**：装全量包时"进度条不动、像卡死"。修好 §4.1b 之后更容易复现 —— 因为终于真的会解包了
+（真机 13 秒、20703 个文件、765 个软链、19938 个 mode）。
+**原因（读码）**：
+1. **`准备载荷` 阶段完全没有回调**：把 207MB 的 `assets/payload.zip` 拷到临时文件时传的是 `copy(raw, out, null)`
+   → 若干秒里一个回调都没有，进度条纹丝不动；
+2. 解包阶段是"每 32 个条目一次"，且 `detail` 直接塞 zip 条目路径（一堆路径文字在跳，人看不出进度）；
+3. `应用清单` 阶段没有任何上报；
+4. 进度条是确定态（`setMax(1000)`），一旦没有回调就静止 —— 没有任何不确定态兜底。
+（解包本来就在后台线程 `"payload-install"` 上跑，这条没问题，ANR 风险不成立 ✓。）
+**改法**：
+- 新增 `app/java/dev/dsh/android/UnpackPlan.java`（纯逻辑，无 Android 依赖）：**阶段**（`准备载荷` → `解包中` →
+  `应用清单（软链与权限）` → `完成`）、**节流**（最快 200ms 一次 = 5Hz，或每 200 个条目，阶段切换与最终值强制上报）、
+  **文案**（`解包中 1234/20703（5%）`、`准备载荷 12.0 MB / 202.0 MB`、`应用清单（软链与权限）：765 个软链 / 19938 个权限`）
+  与 **permille**（`-1` 表示总数未知 → UI 用不确定态）。
+- `Payload.install`：拷贝阶段按字节上报（总长用 `AssetFileDescriptor.getLength()`，拿不到就是"不确定"）；
+  解包阶段改用 **`ZipFile.size()` 的条目数**做分母（可以精确到"第几个条目"）；清单阶段上报开始与结果；
+  结束上报 `完成`。旧的"按压缩字节累加"分母删掉（它和实际进度不成比例）。
+- `MainActivity`：`done < 0` 时切 `setIndeterminate(true)`（不确定态动画），否则确定态 + 计数文案；
+  只在模式变化时切换，避免闪烁。
+- 日志（验收证据，`shiz logcat -d -s dsh | grep payload`）：
+  `payload staged: N bytes in Xms (N progress callbacks)` ·
+  `payload extracted: 20703 files in Xms (N progress callbacks so far)` ·
+  `payload manifest applied: 765 symlinks, 19938 modes in Xms` ·
+  `payload install finished in Xms (N progress callbacks total)`。
+**不装包怎么验**：`UnpackPlan` 是纯逻辑 → JVM 上跑 `UnpackPlanTest`（节流规则、四种阶段文案、permille、
+以及一段**合成时间线**：20703 条目 / 13 秒，打印回调次数与前后几条文案，用来确认 5Hz 节流与"进度确实在动"）。
+命令见 §10「Java 单元测试」。
+❓真机验证归 Lead（装包 + 连拍截图看进度条在动）。
+
+### 4.1d 注意：载荷更新会**整棵替换 runtime**（连带清掉手工 apt 装的东西）
+`Payload.install` 的第一步是 `deleteTree(home)`，然后把新载荷整棵解开 ⇒ **runtime 目录里一切不在载荷里的东西都会消失**：
+本会话就实测到一次 —— 用户在真机上装了新全量包（05:42 解包），
+`/usr/bin/python3`、`/usr/local/bin/node`、`/.payload-8e6597008d91cf51` 的 mtime 全变成 05:42:29-30，
+而**我们此前 apt 装的 JDK（`javac`/`java`/`keytool`）和 `python3-yaml` 一起没了**（要重新 `apt-get install`）。
+- 用户数据不受影响：`/root`（App 存储）是 bind mount，不在 runtime 树里 ✓；`/sdcard` 同理 ✓。
+- 但用户 `apt install` 到 runtime 的工具会在下次载荷更新时消失 —— 排查时**别误判成"环境坏了"**；
+  要长期保留得放到 `/root` 或 `/sdcard` 下。
+- 对发布的意义：改 runtime 内容的代价是"用户侧的自定义被清一次"，所以能走热包就别动载荷。
+- **对本机构建的影响（本次实测）**：`build_apk.sh` 需要 `javac`/`keytool`，而它们是 apt 装的 → **载荷一更新就没了**，
+  得重装：`apt-get update && apt-get install -y openjdk-21-jdk-headless`（本次 128 MB，ports.ubuntu.com 从这台机器
+  只有 ~2 MB/min；换成 `mirrors.aliyun.com/ubuntu-ports` 后 ~9 MB/min，见 `/tmp/apt-mirror.py` 的做法）。
+  纯逻辑测试也可以只装 `openjdk-21-jdk-headless`，跑法见 §10「Java 单元测试」。
+
 ### 4.2 悬浮球 overlay 窗口（🔶球线素材）
 单窗口形变方案（收起=球矩形/展开=条/气泡=自适应矩形）+ `dsh-ball-visual` 空壳层；"不可触摸"约束（visual 层不接收触摸，交互在 bar 层）。待决策：`dsh-ball-visual` 空壳是否删除。
 
@@ -424,6 +468,23 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
 ## 10. 常用命令速查
 
 ```sh
+# 0a) Java 纯逻辑单元测试（不装包、不需要设备、不看 Android SDK）
+sh docs/run-unit-tests.sh
+#     HotVersion 31 + PayloadMarker 15 + UnpackPlan 30（含 20703 条目/13s 的合成时间线）
+#     需要 javac：apt-get install -y openjdk-21-jdk-headless
+# 类型检查（只编译、不打包；用来在装包前发现笔误）：
+#     javac -encoding UTF-8 -source 8 -target 8 -nowarn \
+#       -classpath "/tmp/platform/android-36/android.jar:$(ls app/libs/*.jar | tr '\n' ':')" \
+#       -d /tmp/javac-out @sources.txt      # sources.txt = find app/java build/r -name '*.java'
+#
+# ⚠️ 构建工具链**全在 /tmp**（android.jar / r8.jar / apksig.jar / /tmp/aapt2dir/aapt2），
+#    而载荷更新会整棵替换 runtime（§4.1d）→ 这些会被清掉，重建如下：
+#    ① android.jar: https://dl.google.com/android/repository/platform-36_r02.zip → android-36/android.jar
+#       （解包到 /tmp/platform/android-36/android.jar；仓库脚本按这个路径找）
+#    ② r8.jar(d8) 与 apksig.jar: Maven（com.android.tools:r8 / com.android.tools.build:apksig）
+#    ③ aapt2: build-tools_r36_linux.zip（x86_64 二进制，arm64 上要 qemu-x86_64）
+#    ④ libproot.so: `sh scripts/fetch-proot.sh`（按固定 sha256 从 v1.2.0 的 release 资产取）
+
 # 0b) 发布后真机验证（**只读**：不装包/不重启/不写 prefs；--haptic 才会震一下）
 sh docs/verify-ondevice.sh            # 每项给「期望 / 实际 / 结果」，末尾汇总 PASS/FAIL/MANUAL/SKIP
 sh docs/verify-ondevice.sh --haptic   # 额外验 POST /haptic（手机轻震一次）

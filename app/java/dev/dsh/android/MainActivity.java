@@ -58,6 +58,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     private LinearLayout loading;
     private TextView setupText;
     private ProgressBar setupBar;
+    /** true while the bar is in indeterminate mode (unknown total), so we only switch when it changes */
+    private boolean setupBarUnknown;
     private TextView banner;
     private Button menuButton;
 
@@ -379,6 +381,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
 
         setupBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         setupBar.setMax(1000);
+        setupBarUnknown = false;   // a fresh setup view starts determinate
         LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         barParams.topMargin = dp(20);
@@ -454,12 +457,20 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     private void installPayload() {
         new Thread(() -> {
             try {
+                // The install screen must never look frozen: the payload copy and
+                // the manifest pass report an unknown total (done < 0) and get the
+                // indeterminate animation, while the extraction reports entries and
+                // moves the bar. Labels come from UnpackPlan (phase + counts).
                 Payload.install(this, (done, total, detail) -> handler.post(() -> {
-                    int permille = total > 0 ? (int) Math.min(1000, done * 1000 / total) : 0;
-                    setupBar.setProgress(permille);
-                    setupText.setText(String.format(java.util.Locale.US,
-                            "%d%%  %s", permille / 10,
-                            detail == null ? "解包中…" : detail));
+                    boolean unknown = done < 0;
+                    if (setupBarUnknown != unknown) {
+                        setupBarUnknown = unknown;
+                        setupBar.setIndeterminate(unknown);
+                    }
+                    if (!unknown) {
+                        setupBar.setProgress((int) Math.max(0, Math.min(1000, done)));
+                    }
+                    setupText.setText(detail == null ? "解包中…" : detail);
                 }));
                 handler.post(() -> {
                     Toast.makeText(this, "沙箱安装完成", Toast.LENGTH_SHORT).show();
