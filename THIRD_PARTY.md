@@ -16,10 +16,18 @@
 
 `app/libs/` 里放预编译 jar 是刻意的：这样构建不需要联网取 Maven 依赖。
 
-**第三方站点（用户应知情）**：`dshmarket` 运行时默认会访问 **`https://awesome-dsh-plugin.com/`**
-（目录 `plugins.json`、更新说明 `updates.json`，可用环境变量 `DSHM_UPDATES_ORIGIN` 覆盖），
-另外也有 npm 通道（包内 `lib/catalog-npm.js`）。也就是说：市场目录的可用性依赖那个站点，
-**离线时目录会取不到**（面板本身仍能打开）。这是插件自身的运行时行为，本发行版只负责预装它。
+**第三方站点（用户应知情）**：`dshmarket` 运行时的目录有**三条来源** —— 站点
+`https://awesome-dsh-plugin.com/plugins.json`、以及两条 npm 镜像（实测回退到
+`mirrors.cloud.tencent.com/npm/dsh-plugin-catalog`）；更新说明取 `updates.json`。
+**实测表现**（独立环境）：
+- **只封站点、npm 能通** → 目录接口**仍 200 / 约 1.0 秒 / 4.4 MB**（自动走 npm 镜像回退），**市场照常可用**；
+- **完全断网** → Harness 正常启动、其它接口 5–42ms 照常；目录接口**约 27ms** 返回 502 与一句
+  列明"试过哪些源、走了哪个代理、各自为何失败"的可读错误（面板仍能打开）。
+
+可用环境变量 `DSHM_UPDATES_ORIGIN` 换源。**这是插件自身的运行时行为**，本发行版只负责预装它；
+面向用户的说明（默认连哪些主机、离线表现、如何停用、以及它注册的
+`/restart`·`/rollback`·`/backup`·`/restore`·`/approve-builds` 等写能力）见
+[`docs/preinstalled-plugins.md`](docs/preinstalled-plugins.md)。
 
 ## 构建时下载
 

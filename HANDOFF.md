@@ -328,6 +328,43 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
 2. **载荷更新会清掉 `/tmp` 与 apt 装的一切**（§4.1d），构建工具链也因此全没了；
    恢复清单见 §10（JDK / android.jar / r8 / apksig / aapt2+qemu / librsvg / python3-pil / gcc / libproot）。
 
+### 预装插件市场的两条硬约束（Node 22.x / 升级前必须跑冒烟）
+
+**背景**：本发行版预装第三方市场 `dshmarket@1.66.21`。它依赖 `undici@7`，而 Harness 自身网络层
+（`@deepseek-ai/dsh-http-proxy`、`@deepseek-ai/dsh-web-fetch-http`）依赖 `undici@8`。上游
+[dsh-market#861](https://github.com/dsh-market/dsh-market/issues/861)（open，2026-10-14）报告：
+在 **Node 24.14.1 + DSH 0.2.0-rc.2** 上加载市场后，**宿主自己的出站请求与模型对话全部失败**
+（`TRANSPORT` / `Connection error` / `could not reach …/models`），禁用 `- id: dsh-market` 后恢复；
+根因是两套 undici 争用 `Symbol.for('undici.globalDispatcher.1'/.2')`。
+
+**我们的实测（dsh 0.1.7-rc.2 + Node 22.23.2 + market 1.66.21 + undici 7.30.0 vs 宿主 8.11.2）：未复现。**
+- 真实模型调用：对照组（纯 headless）正常；实验组（同 profile + market）**3/3 正常**，每次 5–7 秒，无传输类错误；
+- dispatcher 机制：宿主 undici 8 先加载 → 插件 undici 7 后加载，符号**未被顶掉**；风险顺序（插件先、宿主后）下符号保持插件写入的 `Agent`，两种顺序下 **Node 内置 fetch / undici8.fetch / undici7.fetch 全部 HTTP 200**；
+- `lib/net.js` 在 **1.66.20（报告版本）与 1.66.21（我们预装版本）逐字节相同** → 机制在我们副本里存在，差异在运行环境（**Node 大版本**是首要嫌疑）。
+
+**约束一：App 运行时 Node 保持 22.x。**
+升到 Node 24 之前必须先验证市场不会破坏宿主网络与模型对话；**症状是模型对话全挂**，属灾难级。
+
+**约束二：升 Node / 升 DSH 到 0.2.x 之前，必须跑一次冒烟。**
+仓库里已加脚本 `scripts/smoke-market-llm.sh`（约 10 秒）：临时 profile 先跑一次真实模型调用（对照组），
+再把 payload 里 vendored 的 `dshmarket` + 依赖注入同一 profile 跑第二次（实验组），
+只要出现 `TRANSPORT` / `Connection error` / `could not reach` 或没有输出即退出码非 0。
+用法：`sh scripts/smoke-market-llm.sh`（可覆盖 `DSH_INSTALL` / `CRED` / `PAYLOAD_NM` / `TASK`）。
+凭据只放在临时目录，退出即删；不联网安装任何东西（只用 payload 里已 vendor 的包）。
+
+**用户侧规避（已写进 `docs/preinstalled-plugins.md` §5 与用户说明）**：出现模型/网络异常时，
+在 profile patch 里加
+
+```yaml
+- id: dsh-market
+  disabled: true
+```
+
+并重启，即可恢复宿主网络与模型对话（市场界面与它的服务不再加载，包文件留在磁盘上）。
+
+**参考链接**：上游 issue #861 <https://github.com/dsh-market/dsh-market/issues/861>；
+我们的实测原始输出见 `dsh-market-evidence/A-peer-and-runtime-audit.md` 与本次审计记录。
+
 ### 4.2 悬浮球 overlay 窗口（🔶球线素材）
 单窗口形变方案（收起=球矩形/展开=条/气泡=自适应矩形）+ `dsh-ball-visual` 空壳层；"不可触摸"约束（visual 层不接收触摸，交互在 bar 层）。待决策：`dsh-ball-visual` 空壳是否删除。
 
@@ -531,13 +568,20 @@ sh docs/run-unit-tests.sh
 #       -classpath "/tmp/platform/android-36/android.jar:$(ls app/libs/*.jar | tr '\n' ':')" \
 #       -d /tmp/javac-out @sources.txt      # sources.txt = find app/java build/r -name '*.java'
 #
-# ⚠️ 构建工具链**全在 /tmp**（android.jar / r8.jar / apksig.jar / /tmp/aapt2dir/aapt2），
-#    而载荷更新会整棵替换 runtime（§4.1d）→ 这些会被清掉，重建如下：
-#    ① android.jar: https://dl.google.com/android/repository/platform-36_r02.zip → android-36/android.jar
-#       （解包到 /tmp/platform/android-36/android.jar；仓库脚本按这个路径找）
-#    ② r8.jar(d8) 与 apksig.jar: Maven（com.android.tools:r8 / com.android.tools.build:apksig）
-#    ③ aapt2: build-tools_r36_linux.zip（x86_64 二进制，arm64 上要 qemu-x86_64）
-#    ④ libproot.so: `sh scripts/fetch-proot.sh`（按固定 sha256 从 v1.2.0 的 release 资产取）
+# ⚠️ 构建工具链一半在 /tmp、一半是 apt 装的，而载荷更新会整棵替换 runtime（§4.1d）
+#    → 每次在设备上装了新 APK 之后都会被清空。**一条命令恢复**：
+sh scripts/restore-build-toolchain.sh
+#    它会：换 aliyun 镜像 → apt 装 JDK21/librsvg/PIL/gcc/qemu-user-static/交叉 libc/python3-yaml
+#    → 下 android.jar(platform-36_r02) / r8.jar / apksig.jar / aapt2(Maven 的 linux jar，2.4MB)
+#    → 重建 /opt/android/root64 这个 QEMU_LD_PREFIX 树与 /usr/bin/qemu-x86_64 软链 → 自检
+#    还差 libproot.so：`sh scripts/fetch-proot.sh`，出包时 PROOT=$PWD/build/proot/libproot.so
+#
+# 体积卫生：vendor 进来的插件按 `sh scripts/trim_vendor.sh` 裁掉运行时用不到的东西
+#    （实测 7.3MB → 4.0MB；`package.json` 的 main/module/browser/types/exports 指向的路径一律保留）。
+#    注意：overlay 是"合并"不是"替换"，所以 assemble_payload.sh 里对 seed 也再裁一次。
+#
+# 退役包门禁：`node scripts/check-legacy-market-residue.mjs --root <产物目录>`
+#    （assemble_payload.sh 已接线；热包/payload zip/APK 解出的目录也可以单独跑）。
 
 # 0b) 发布后真机验证（**只读**：不装包/不重启/不写 prefs；--haptic 才会震一下）
 sh docs/verify-ondevice.sh            # 每项给「期望 / 实际 / 结果」，末尾汇总 PASS/FAIL/MANUAL/SKIP

@@ -38,6 +38,12 @@ echo "== pnpm (fetched, not committed) =="
 # — the same step CI runs.
 sh "$ROOT/scripts/fetch-pnpm.sh"
 
+echo "== trim vendored plugins =="
+# Dev-only files (TS sources, type trees, docs) never load at runtime; trimming keeps
+# the payload and every hot package that much smaller. Idempotent, and it refuses to
+# leave a package whose package.json contract no longer resolves.
+sh "$ROOT/scripts/trim_vendor.sh"
+
 echo "== overlay / =="
 cp -a "$ROOT/payload/." "$ROOTFS/"
 chmod +x "$ROOTFS/opt/dsh/android/start-dsh.sh" "$ROOTFS/usr/local/bin/shiz" "$ROOTFS/usr/local/bin/ui"
@@ -82,6 +88,18 @@ done
 if [ ! -f "$SEED/.dsh/profiles/web/node_modules/dshmarket/package.json" ]; then
   echo "MISSING payload package: dshmarket" >&2
   exit 1
+fi
+# The full residue check (distinguishes real leftovers from code that merely mentions
+# the retired name). Run it on the artifact, not on the working tree.
+# The overlay merges, so a previous build's untrimmed copy would survive here. Trim
+# the assembled seed as well (idempotent; the repo copy was already trimmed above).
+sh "$ROOT/scripts/trim_vendor.sh" "$SEED/.dsh/profiles/web/node_modules" >/dev/null
+
+if [ -f "$ROOT/scripts/check-legacy-market-residue.mjs" ]; then
+  node "$ROOT/scripts/check-legacy-market-residue.mjs" --root "$SEED" || {
+    echo "legacy market residue in the assembled payload" >&2
+    exit 1
+  }
 fi
 for f in opt/dsh/android/pty-server.mjs \
          opt/dsh/android/start-dsh.sh \

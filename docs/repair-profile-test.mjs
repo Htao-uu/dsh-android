@@ -163,6 +163,14 @@ makeSeed();
 	check(readFileSync(join(dir, "cordis.patch.yml"), "utf8").includes("android-sandbox"), "the plugin row is still added");
 }
 
+/* 6. the shipped seed itself must not reference the retired package */
+{
+	const seed = JSON.parse(readFileSync(join(ROOT, "profile/package.json"), "utf8"));
+	check(!Object.keys(seed.dependencies).includes(LOCAL_MARKET), "seed profile has no retired dependency");
+	check(!seed.dsh.profile.bundles.includes(LOCAL_MARKET), "seed profile has no retired bundle row");
+	check(seed.dsh.profile.bundles.includes("dshmarket"), "seed profile selects the public market");
+}
+
 rmSync(SEED, { recursive: true, force: true });
 console.log(`repair-profile: ${checks} checks, ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);
