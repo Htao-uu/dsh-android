@@ -68,7 +68,10 @@ if not same_line: return 1                                     # 换线 → sp1
 return tracker.sp + 1                                          # 同线新内容 → +1
 ```
 **准备 sp2 的正确做法**：把 `HOT` 改成 `{"app":"1.1.5","terminal":"2","sp":1,"hash":""}`（hash 必须与即将构建的内容 digest 不同；只改 sp 不改 hash，若内容没变会被判成"同内容"→ 只得到 sp1）。
-**顺序：先出包（`build_apk.sh`，会把 HOT 写回 sp0）→ 再改 HOT → 再 `release_hot.sh`**（该脚本自己会再构建一次热包，得到 sp2，并同步 tracker 与 `update.json`）。
+**顺序：先出包（`build_apk.sh`，会把 HOT 写回 sp0）→ 再改 HOT → 再 `release_hot.sh`**（✅本会话又踩了一次：`build_apk.sh` 不仅写 HOT，还会重跑 `make_update_manifest.py` 把
+`update.json` 也改成 `--base` 的 sp0 —— 发布后若再打一次 APK，**必须把 `HOT` 与 `update.json` 都恢复成发布值**
+（否则 `hot.version` 会退回等于内建版本，设备就再也收不到这次热更新）。恢复方法：把发布用的热包拷回
+`build/hot-assets/hot.zip`，跑 `make_update_manifest.py`，再手写 `HOT` 的 sp/hash。）（该脚本自己会再构建一次热包，得到 sp2，并同步 tracker 与 `update.json`）。
 ✅本会话已把 `HOT` 置为 `sp=1, hash=""`（md5 `9ee8956fa1d80b5233e9ec1db6443839`），并用只读方式回放 `next_sp` 逻辑确认：下一次非 base 构建 → **sp2**。
 
 ### 2.3 为什么不开 t3
