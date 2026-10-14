@@ -542,6 +542,7 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
 
 | 项 | 状态 | 谁定 |
 |---|---|---|
+| 把新 payload 烘进 APK（市场已换公开包） | **待做**：热包 `1.2.0-t2-sp2` 已发，现有设备立刻换成公开市场；新装设备仍拿到旧 baked 市场（含已退役的自建包）→ 下次出包时用 `versionCode` 10202 重建全量/瘦包。裁剪已就绪：`scripts/trim_vendor.sh`（7.3MB→4.0MB，实测隔离实例通过）已接进 `assemble_payload.sh`，但**当前 payload.zip 与两个 APK 未重建**（仍是 10201 的旧内容）。⚠️ 载荷更新会清掉构建工具链：先 `dpkg --configure -a`，再 `sh scripts/restore-build-toolchain.sh` | Lead / CI |
 | `applyHot` 重放修复 | ✅代码+编译+决策表测试完成；真机验证待装包 | — |
 | #3 种子闸门 | ✅已改；全新安装真机待验 | — |
 | pnpm 预装 | ✅已按 **B 方案**落地（41MB payload 二进制 + 热包排除）（§6.3）；真机 `pnpm -v` 待验 | — |
