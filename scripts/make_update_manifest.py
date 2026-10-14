@@ -21,6 +21,7 @@ Output: <repo-root>/update.json
 from __future__ import annotations
 
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -54,7 +55,10 @@ def main() -> None:
         "schema": 2,
         "app": {
             "version": app,
-            "versionCode": current["code"],
+            # APP_CODE lets a revision keep the version *name* while bumping the code
+            # (devices compare versionCode, so "1.2.0 build 10200 -> 10201" is what makes
+            # an in-place asset replacement visible to them).
+            "versionCode": int(os.environ.get("APP_CODE") or current["code"]),
             "url": f"{BASE}/releases/latest/download/dsh-android.apk",
             # The shell without the runtime: a few megabytes, for phones that
             # already have the terminal — which is every phone after the first
@@ -82,7 +86,8 @@ def main() -> None:
     }
     out = root / "update.json"
     out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"wrote {out}: app {app} ({current['code']}), terminal t{current['terminal']}, hot {hot or '（无）'}")
+    code = int(os.environ.get("APP_CODE") or current["code"])
+    print(f"wrote {out}: app {app} ({code}), terminal t{current['terminal']}, hot {hot or '（无）'}")
 
 
 if __name__ == "__main__":

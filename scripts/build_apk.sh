@@ -16,6 +16,10 @@ set -eu
 # Override with DSH_SRC_DIR when driving it from a separate build directory.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_VERSION="${APP_VERSION:-$(cat "$ROOT/VERSION" 2>/dev/null || echo 1.0.0)}"
+# The code is derived from the version name, but a revision that keeps the same
+# name (assets replaced in place, "1.2.0" build 10201) needs to say so explicitly:
+# devices compare versionCode, so without a bump they see no update at all.
+APP_CODE="${APP_CODE:-$(echo "$APP_VERSION" | awk -F. '{printf "%d", $1*10000 + $2*100 + $3}')}"
 # The sandbox runtime's own number, independent of the app version on purpose: a
 # shell release that does not touch the runtime keeps the same terminal line.
 TERMINAL_VERSION="${TERMINAL_VERSION:-$(cat "$ROOT/ROOTFS_VERSION" 2>/dev/null || echo 1)}"
@@ -52,7 +56,7 @@ QEMU_LD_PREFIX=/opt/android/root64 qemu-x86_64 "$AAPT2" link \
   -I "$ANDROID_JAR" \
   --manifest "$APP/AndroidManifest.xml" \
   --min-sdk-version 26 --target-sdk-version 28 \
-  --version-code "$(echo "$APP_VERSION" | awk -F. '{printf "%d", $1*10000 + $2*100 + $3}')" \
+  --version-code "$APP_CODE" \
   --version-name "$APP_VERSION" \
   --java "$BUILD/r" \
   -o "$BUILD/base.apk" \
@@ -67,15 +71,13 @@ echo "== update manifest =="
 python3 "$ROOT/scripts/make_update_manifest.py" "$ROOT"
 
 echo "== 3/7 javac =="
-python3 - "$BUILD/payload-assets/payload.zip" "$SRC_JAVA/dev/dsh/android/BuildInfo.java" "$APP_VERSION" "$TERMINAL_VERSION" <<'GEN'
+python3 - "$BUILD/payload-assets/payload.zip" "$SRC_JAVA/dev/dsh/android/BuildInfo.java" "$APP_VERSION" "$TERMINAL_VERSION" "$APP_CODE" <<'GEN'
 import hashlib, pathlib, sys
 archive = pathlib.Path(sys.argv[1])
 digest = hashlib.sha256(archive.read_bytes()).hexdigest()[:16]
 version = sys.argv[3].strip()   # version string, not a path
 terminal = sys.argv[4].strip()
-code = 0
-for part in version.split(".")[:3]:
-    code = code * 100 + int(part)
+code = int(sys.argv[5])         # APP_CODE: a revision keeps the name, bumps the code
 target = pathlib.Path(sys.argv[2])
 target.write_text(
     "package dev.dsh.android;\n\n"

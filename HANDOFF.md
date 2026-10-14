@@ -120,6 +120,20 @@ profile 三行，并把需要人眼的项（热包重放六步、#3 清数据闸
 市场页面与真装插件）列成带期望值的步骤。本版期望值集中在脚本顶部的 `EXPECT_*` 常量里，
 **发布新版本时只改那一段**。
 
+### 3.4c 原地替换同一版本的资产（2026-10-14 实操过：1.2.0 build 10201）
+需求形态：**不改版本名、只换资产**，但设备要能察觉 → 靠 `versionCode`。
+- `build_apk.sh` 新增 `APP_CODE`（默认仍按版本名推导）：`APP_CODE=10201 sh scripts/build_apk.sh`；
+  `scripts/make_update_manifest.py` 同样认 `APP_CODE`，写进 `update.json` 的 `app.versionCode`。
+- 实操：`APP_CODE=10201 PROOT=$PWD/build/proot/libproot.so sh scripts/build_apk.sh`（全量）+
+  `… SLIM=1 sh scripts/build_apk.sh`（瘦包）→ 从 APK 里实证
+  `aapt2 dump badging out/dsh-android.apk | grep package:` → `versionCode='10201' versionName='1.2.0'` ✓。
+- 资产：**`tag` 不变、release id 不变、hot 不动**（热包内容 digest 没变就保持原资产），只替换
+  `dsh-android.apk` + `dsh-android-slim.apk` + `SHA256SUMS`（同名替换 = 先 DELETE 再 POST）。
+- ⚠️ 这条网络很会掉 TLS：上传要「重试 + 遇到 422 就重新删除再传」；422 常常是"请求发出去了、
+  响应丢了"——服务器其实已经存下（本次 slim 就这么"自己好了"）。脚本化见 `/tmp/robust-upload.sh` 的做法。
+- 回读清单：`/releases/<id>` 的 name/size/digest、`latest` 归属、四个 `latest/download/*` 的 200、
+  以及把 slim/hot 下回来逐字节比对（全量包太大时至少比 digest + 首尾抽样）。
+
 ### 3.5 CI：在 GitHub Actions 上组全量包（已批准；**待仓库写权限后 push**）
 **workflow**：`.github/workflows/release-full.yml`（`sync_repo.sh` 现在会镜像 `.github/`）。**只手动触发**
 （`workflow_dispatch`，inputs：`tag` 必填 / `dry_run` 可选），**不要加 push 触发** —— 一次跑 10–15 分钟。
@@ -303,6 +317,16 @@ sha256=`dce1756943e53632411ecc789e740825da086abacdc804687580872f0660354e`、206,
   得重装：`apt-get update && apt-get install -y openjdk-21-jdk-headless`（本次 128 MB，ports.ubuntu.com 从这台机器
   只有 ~2 MB/min；换成 `mirrors.aliyun.com/ubuntu-ports` 后 ~9 MB/min，见 `/tmp/apt-mirror.py` 的做法）。
   纯逻辑测试也可以只装 `openjdk-21-jdk-headless`，跑法见 §10「Java 单元测试」。
+
+### 4.1e 两个观察（2026-10-14）
+1. **`BuildInfo.PAYLOAD_VERSION` 是 payload.zip 的「字节哈希」**，而 zip 条目带时间戳 ⇒
+   **内容完全相同的重建也会换哈希**（本次实测：新旧 payload 逐条目内容 **0 处不同**、25892 条目一致，
+   只有条目时间戳不同 → sha256 从 `8e659700…` 变成 `e9f05c10…`）。后果：每次出 APK，
+   设备都会做一次完整的 200MB 解包（13 秒）。想让"内容没变的重新出包"不再触发解包，
+   得在 `make_payload_zip.py` 里把条目时间戳固定成常量（内容哈希化）——**建议但未实施**。
+   好处也有：本次 1.2.0 build 10201 因此**必然触发一次解包**，正好用来验收进度条。
+2. **载荷更新会清掉 `/tmp` 与 apt 装的一切**（§4.1d），构建工具链也因此全没了；
+   恢复清单见 §10（JDK / android.jar / r8 / apksig / aapt2+qemu / librsvg / python3-pil / gcc / libproot）。
 
 ### 4.2 悬浮球 overlay 窗口（🔶球线素材）
 单窗口形变方案（收起=球矩形/展开=条/气泡=自适应矩形）+ `dsh-ball-visual` 空壳层；"不可触摸"约束（visual 层不接收触摸，交互在 bar 层）。待决策：`dsh-ball-visual` 空壳是否删除。
