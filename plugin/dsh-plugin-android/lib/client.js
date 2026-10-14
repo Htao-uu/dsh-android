@@ -4713,7 +4713,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 		 * black inside a white UI. The boot script writes the same two attributes,
 		 * so this reads them the same way in both worlds.
 		 */
-		function terminalThemeName() {
+		function pageThemeName() {
 			const root = document.documentElement;
 			const source = root.dataset === undefined ? undefined : root.dataset.dsThemeSource;
 			if (source === "light" || source === "dark") return source;
@@ -4721,6 +4721,64 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			if (root.hasAttribute("data-ds-dark-theme")) return "dark";
 			if (typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
 			return "light";
+		}
+
+		/** The terminal panel paints into the page, so it wears the page's palette. */
+		function terminalThemeName() {
+			return pageThemeName();
+		}
+
+		/**
+		 * Tell the app which palette the page is painting.
+		 *
+		 * The status and navigation bars are Android's, not the page's, and the app's
+		 * window follows the *phone's* dark mode — which routinely disagrees with the
+		 * harness setting. That is what left a white bar strip above and below a dark
+		 * page. The app cannot read the DOM, so we push the answer: once at startup,
+		 * then only when it actually changes. No polling — the observer fires on the
+		 * attributes the layout writes, and a value the app already has is not resent.
+		 */
+		function installThemeReport() {
+			let sent = null;
+			let failures = 0;
+			let bodyObserver = null;
+			const attachBody = () => {
+				if (bodyObserver !== null || document.body === null) return;
+				bodyObserver = new MutationObserver(sync);
+				bodyObserver.observe(document.body, {
+					attributes: true,
+					attributeFilter: ["data-ds-dark-theme"]
+				});
+			};
+			function sync() {
+				attachBody();
+				const dark = pageThemeName() === "dark";
+				if (dark === sent) return;
+				call("/theme", { dark }).then(() => {
+					sent = dark;
+					failures = 0;
+				}).catch(() => {
+					// The bridge may not be injected yet; an older app has no
+					// `/theme` at all, so give up after a few tries instead of
+					// hammering it.
+					if (failures++ < 3) window.setTimeout(sync, 1500);
+				});
+			}
+			const observer = new MutationObserver(sync);
+			observer.observe(document.documentElement, {
+				attributes: true,
+				attributeFilter: ["data-ds-theme-source", "data-ds-dark-theme"]
+			});
+			const media = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+			if (media !== null && typeof media.addEventListener === "function") media.addEventListener("change", sync);
+			sync();
+			return {
+				disconnect() {
+					observer.disconnect();
+					if (bodyObserver !== null) bodyObserver.disconnect();
+					if (media !== null && typeof media.removeEventListener === "function") media.removeEventListener("change", sync);
+				}
+			};
 		}
 
 		/**
@@ -5204,6 +5262,13 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				const inbox = installBallInbox(ctx);
 				return () => inbox.disconnect();
 			}, "dsh-plugin-android: ball inbox");
+			// The window's bars belong to the app, but only the page knows which
+			// palette it is painting — push it, so a dark page never keeps white
+			// strips above and below it.
+			ctx.effect(() => {
+				const report = installThemeReport();
+				return () => report.disconnect();
+			}, "dsh-plugin-android: window theme");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "android",

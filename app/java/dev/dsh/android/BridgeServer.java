@@ -27,6 +27,7 @@ import java.util.Map;
  * cannot reach on its own.
  *
  *   GET  /snapshot                     everything the settings page polls
+ *   POST /theme                     {"dark": true|false}
  *   POST /server/start|stop|restart
  *   POST /open-in-browser
  *   POST /import
@@ -54,6 +55,15 @@ public final class BridgeServer {
 
         /** Open the file picker so the user can apply a hot package by hand. */
         void onHotPickRequested();
+
+        /**
+         * Which palette the page is painting (see `POST /theme`).
+         *
+         * The window's bars and its own background belong to Android, and its theme
+         * follows the *phone's* dark mode - which can disagree with the harness. The
+         * page is the only place that knows the harness theme, so it pushes it here.
+         */
+        void onThemeReported(boolean dark);
 
         /** Open the file picker for the floating ball's picture. */
         void onBallImageRequested();
@@ -221,6 +231,14 @@ public final class BridgeServer {
         switch (path) {
             case "/snapshot":
                 respondJson(out, 200, snapshot());
+                return;
+            case "/theme":
+                // The page's palette, so the window can paint its bars and its own
+                // background to match it. Fire-and-forget: the app remembers the last
+                // value and re-applies it on every load, so a lost report is corrected
+                // by the next one instead of leaving white edges behind.
+                host.onThemeReported(request.optBoolean("dark", false));
+                respondJson(out, 200, ok("主题已同步"));
                 return;
             case "/haptic":
                 // Fire-and-forget feedback for a Web-UI control: the terminal's key

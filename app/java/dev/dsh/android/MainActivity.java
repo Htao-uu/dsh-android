@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,6 +14,7 @@ import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -50,6 +52,12 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     private static final int REQ_MOUNT = 0x1004;
     private static final int REQ_HOT = 0x1005;
     private static final int REQ_BALL = 0x1006;
+
+    /** The palette the page last reported; null until it says anything. */
+    private Boolean pageDark;
+
+    /** Remembered across restarts, so the first frame is already right. */
+    private static final String PREF_PAGE_DARK = "page_theme_dark";
 
     private FrameLayout root;
     private WebView web;
@@ -94,9 +102,21 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         createPanel();
         createLoadingOverlay();
         createSetupOverlay();
+        applyWindowTheme(preferredDark());
 
         ShizukuBridge.addPermissionListener();
         BridgeServer.start(new BridgeServer.Host() {
+            @Override
+            public void onThemeReported(boolean dark) {
+                // The page is the source of truth for the window's palette; keep it
+                // for the next launch too, so the first frame is never the wrong one.
+                try {
+                    App.i().prefs.edit().putBoolean(PREF_PAGE_DARK, dark).apply();
+                } catch (Throwable ignored) {
+                }
+                handler.post(() -> applyWindowTheme(dark));
+            }
+
             @Override
             public void onImportRequested() {
                 handler.post(MainActivity.this::onImport);
@@ -221,6 +241,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                 // and a white page painted over the dark shell.
                 pageReady = true;
                 injectBridge();
+                applyWindowTheme(preferredDark());
                 syncLoading(ServerBus.state());
             }
 
@@ -236,6 +257,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             @Override
             public void onPageFinished(WebView view, String url) {
                 pageReady = true;
+                applyWindowTheme(preferredDark());
                 syncLoading(ServerBus.state());
                 // Re-inject on every navigation: the harness page is a SPA, so a
                 // reload would otherwise lose the bridge handle the plugin reads.
@@ -540,9 +562,94 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         }
     }
 
-    /** The window colour for the current system theme. */
+    /**
+     * The window colour for the palette the page is painting.
+     *
+     * Not the system's dark mode: the harness has its own light/dark setting, and the
+     * phone's can disagree with it. The page's report is what counts; before the first
+     * one we use the last value it sent (this preference outlives the process) and
+     * only then the phone's own mode.
+     */
     private int bootColor() {
-        return getResources().getColor(R.color.boot_background);
+        return getResources().getColor(preferredDark() ? R.color.window_dark : R.color.window_light);
+    }
+
+    /** The palette the window should wear right now. */
+    private boolean preferredDark() {
+        if (pageDark != null) return pageDark;
+        try {
+            android.content.SharedPreferences prefs = App.i().prefs;
+            if (prefs.contains(PREF_PAGE_DARK)) return prefs.getBoolean(PREF_PAGE_DARK, false);
+        } catch (Throwable ignored) {
+            // App not up yet: fall through to the system's answer.
+        }
+        return (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /**
+     * Paint the window for the palette the page is painting.
+     *
+     * The bars belong to Android, not to the page, so on a dark page over a light
+     * phone they stayed white — and because this activity declares `uiMode` in
+     * `configChanges` it is never recreated when the phone's mode flips, so even the
+     * night resources stayed put: the window kept `#FFF7F8FA` behind both bars.
+     * Everything visible in those strips is set here: the decor background (that is
+     * what shows behind the bars with targetSdk 28), the two bar colours, the icon
+     * brightness, and the WebView's own underlay.
+     */
+    private void applyWindowTheme(boolean dark) {
+        pageDark = dark;
+        int color = getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+        Window window = getWindow();
+        window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(color));
+        window.setStatusBarColor(color);
+        window.setNavigationBarColor(color);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ enforces its own contrast scrim over a light bar (and over
+            // the gesture bar); with the colours pinned here it only muddies them.
+            window.setNavigationBarContrastEnforced(false);
+            window.setStatusBarContrastEnforced(false);
+        }
+        setLightSystemBars(!dark);
+        if (root != null) root.setBackgroundColor(color);
+        if (web != null) web.setBackgroundColor(color);
+        if (loading != null) loading.setBackgroundColor(color);
+        if (setup != null) setup.setBackgroundColor(color);
+    }
+
+    /** Light icons on a light bar, dark icons on a dark one. */
+    private void setLightSystemBars(boolean light) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(light ? mask : 0, mask);
+            }
+            return;
+        }
+        View decor = getWindow().getDecorView();
+        int flags = decor.getSystemUiVisibility();
+        int bars = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        // Light navigation bar icons need API 26; below that the bar stays dark, which
+        // is what the platform does anyway.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            bars |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        }
+        decor.setSystemUiVisibility(light ? (flags | bars) : (flags & ~bars));
+    }
+
+    /**
+     * The phone's own dark mode flipped. This activity is not recreated (see
+     * `configChanges`), so nothing would repaint the window on its own; re-resolve
+     * from the new configuration, and let the page's report win if it has one.
+     */
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        applyWindowTheme(preferredDark());
     }
 
     /**

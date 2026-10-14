@@ -7,6 +7,16 @@
       on a light phone (or the reverse).
     -->
     <color name="boot_background">#FFF7F8FA</color>
+    <!--
+      Window chrome for the *page's* theme, chosen in code (MainActivity
+      applyWindowTheme). Deliberately unqualified: these must NOT flip with
+      values-night/, because the harness page has its own light/dark setting and the
+      phone's dark mode can disagree with it. With targetSdk 28 the decor background
+      is what shows behind the status and navigation bars, so its colour is exactly
+      what decides between "two white edges" and none.
+    -->
+    <color name="window_light">#FFF7F8FA</color>
+    <color name="window_dark">#FF0E0F12</color>
     <color name="console_background">#FFF1F2F5</color>
     <color name="console_card">#FFFFFFFF</color>
     <color name="console_text">#FF1F2329</color>
