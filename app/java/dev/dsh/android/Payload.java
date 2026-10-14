@@ -61,23 +61,32 @@ public final class Payload {
     public static final String HOT_ASSET = "hot.zip";
 
     private static final String[] HOT_ALLOWED_PREFIXES = {
-            "opt/dsh/android/", "opt/dsh/dsh-plugin-android/", "etc/", "@home/"
+            "opt/dsh/android/", "opt/dsh/dsh-plugin-android/", "etc/", "@home/",
+            // guest commands (ui, shiz, ball). They are exactly the kind of thing
+            // that gets a contract fix, and shipping one through the runtime
+            // channel means re-sending 190 MB for a 5 KB script.
+            "usr/local/bin/"
     };
 
     private static final String HOT_VERSION_KEY = "hotVersion";
 
     /**
-     * Re-apply the hot overlay into the bundled rootfs.
+     * Re-apply the hot overlay into the bundled rootfs, then the user's package.
      *
      * Runs on every launch: the payload archive is only re-extracted when its
      * content hash changes, and without this a plugin or guest-script fix would
      * mean unpacking the whole rootfs again. Entries are guest-absolute paths.
+     *
+     * The baked overlay is the *baseline*, not the last word: a package the user
+     * fetched or picked is replayed on top of it here, which is what makes an
+     * incremental hot update survive a restart.
      */
     public static void applyHot(Context ctx) {
         int fromAsset = unpackHot(ctx, null, null);
         if (fromAsset >= 0) {
             App.log("hot overlay applied: " + fromAsset + " files");
         }
+        replayStoredHot(ctx);
         discardForeignHot();
         // Deliberately nothing else. Packages used to be picked up from Download
         // or Documents on every launch, which meant one stale dsh-hot.zip left in
@@ -102,8 +111,94 @@ public final class Payload {
         String line = App.appVersion() + "-t" + App.terminalVersion() + "-";
         if (applied.startsWith(line)) return;
         App.i().prefs.edit().remove(HOT_VERSION_KEY).apply();
+        // The package itself is just as foreign as the record: keeping it would
+        // let the next startup replay another runtime's files.
+        //noinspection ResultOfMethodCallIgnored
+        storedHotPackage().delete();
         hotMessage = "已清除不属于本版本的热包（" + applied + "）";
         App.log("hot package " + applied + " is from another line; discarded");
+    }
+
+    /**
+     * The one slot for "the hot package the user actually applied".
+     *
+     * The baked overlay is written into the rootfs on every launch, so the files
+     * a user fetched or picked are replaced by the APK's own copies unless the
+     * app can put them back afterwards. Keeping the archive itself is what makes
+     * that possible: ~300 KB in the app's private storage.
+     */
+    private static File storedHotPackage() {
+        return new File(App.i().getFilesDir(), "hot-applied.zip");
+    }
+
+    /** Remember an applied package so the next launch can replay it. */
+    private static void stampStoredHot(File archive) {
+        if (archive == null || !archive.isFile()) return;
+        File target = storedHotPackage();
+        if (archive.getAbsolutePath().equals(target.getAbsolutePath())) return;
+        try (InputStream in = new FileInputStream(archive);
+             OutputStream out = new FileOutputStream(target)) {
+            copy(in, out, null);
+            App.log("hot package kept for replay: " + target.getName());
+        } catch (Throwable error) {
+            App.log("hot package could not be kept: " + error);
+        }
+    }
+
+    /**
+     * Put the user's package back after the baked overlay was written.
+     *
+     * Called from {@link #applyHot} on every launch, immediately after the baked
+     * copy: the APK's files land first, then the package the user applied is
+     * replayed on top when it is genuinely newer ({@link HotVersion#shouldReplay}).
+     * Without this the app says "已应用 1.1.5-t2-sp2" while the disk holds the
+     * older baked files, the update card stops offering the package (the recorded
+     * version matches), and picking the same zip by hand is refused as
+     * "already this version" — a state the user cannot get out of.
+     */
+    private static void replayStoredHot(Context ctx) {
+        File stored = storedHotPackage();
+        if (!stored.isFile()) return;
+        try (ZipFile zip = new ZipFile(stored)) {
+            String storedVersion = hotVersionOf(zip);
+            String bakedVersion = packagedHotVersion();
+            if (!HotVersion.shouldReplay(storedVersion, bakedVersion, App.appVersion(), App.terminalVersion(),
+                    stored.lastModified() > apkLastUpdateTime())) {
+                // The APK carries the same or newer files, the package is from
+                // another line, or it predates this install: drop it and state
+                // what is really on disk.
+                //noinspection ResultOfMethodCallIgnored
+                stored.delete();
+                App.i().prefs.edit().putString(HOT_VERSION_KEY, bakedVersion == null ? "" : bakedVersion).apply();
+                App.log("hot replay: dropped " + storedVersion + " (baked " + bakedVersion + ")");
+                return;
+            }
+            int written = unpackHot(ctx, zip, storedVersion);
+            if (written < 0) return;
+            App.i().prefs.edit().putString(HOT_VERSION_KEY, storedVersion).apply();
+            hotMessage = "已重放热包 " + storedVersion + "（" + written + " 个文件）";
+            App.log("hot replay: re-applied " + storedVersion + " (" + written + " files) after the baked overlay");
+        } catch (Throwable error) {
+            App.log("hot replay failed: " + error);
+        }
+    }
+
+    /**
+     * When this APK was installed or last updated.
+     *
+     * The comparison basis for "is the stored package newer than the app": a
+     * package applied before this build cannot be newer than what the build
+     * ships. Returns 0 when the platform will not say, which callers read as
+     * "keep the user's package and let the version numbers decide".
+     */
+    private static long apkLastUpdateTime() {
+        try {
+            android.content.pm.PackageInfo info = App.i().getPackageManager()
+                    .getPackageInfo(App.i().getPackageName(), 0);
+            return info.lastUpdateTime;
+        } catch (Throwable error) {
+            return 0L;
+        }
     }
 
     /** Last hot-package outcome, for the update card to show after a local pick. */
@@ -142,6 +237,9 @@ public final class Payload {
                     answer.put("error", "解包失败（包内路径不在允许范围？）");
                 } else {
                     App.i().prefs.edit().putString(HOT_VERSION_KEY, version).apply();
+                    // Keep it: the next launch has to replay this package over the
+                    // baked overlay (see applyHot).
+                    stampStoredHot(archive);
                     answer.put("ok", true);
                     answer.put("version", version);
                     answer.put("files", written);
@@ -223,6 +321,9 @@ public final class Payload {
                     return answer;
                 }
                 App.i().prefs.edit().putString(HOT_VERSION_KEY, version).apply();
+                // Keep the downloaded archive too, so the next launch replays it
+                // after the baked overlay instead of reverting to the APK's copy.
+                stampStoredHot(staged);
                 answer.put("ok", true);
                 answer.put("version", version);
                 answer.put("files", written);
@@ -305,6 +406,17 @@ public final class Payload {
         return written;
     }
 
+    /**
+     * Does this hot entry need the execute bit?
+     *
+     * java.util.zip cannot read the archive's unix attributes, so the mode has to
+     * come from the path: shell scripts and anything that lands in the guest's
+     * bin directory is a command.
+     */
+    private static boolean executableEntry(String name) {
+        return name.endsWith(".sh") || name.startsWith("usr/local/bin/");
+    }
+
     /** One entry, if it lands inside the rootfs and inside an allowed prefix. */
     private static boolean writeHotEntry(Context ctx, File root, String name, InputStream in)
             throws IOException {
@@ -339,7 +451,7 @@ public final class Payload {
         try (OutputStream out = new FileOutputStream(target)) {
             copy(in, out, null);
         }
-        chmod(target, name.endsWith(".sh") ? 0755 : 0644);
+        chmod(target, executableEntry(name) ? 0755 : 0644);
         return true;
     }
 
@@ -362,7 +474,7 @@ public final class Payload {
                 try (OutputStream out = new FileOutputStream(target)) {
                     copy(zip, out, null);
                 }
-                chmod(target, name.endsWith(".sh") ? 0755 : 0644);
+                chmod(target, executableEntry(name) ? 0755 : 0644);
                 written++;
             }
         } catch (IOException error) {

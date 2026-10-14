@@ -41,6 +41,9 @@ ALLOWED_PREFIXES = (
     "opt/dsh/dsh-plugin-android/",
     "etc/",
     "@home/",
+    # guest commands: ui, shiz, ball. Kept in step with HOT_ALLOWED_PREFIXES in
+    # app/java/dev/dsh/android/Payload.java — the app validates the same list.
+    "usr/local/bin/",
 )
 
 # Where the last package this tree produced is recorded: `{app, sp, hash}`.
@@ -60,7 +63,22 @@ def add_file(archive: zipfile.ZipFile, source: Path, arcname: str) -> int:
 
 
 def name_is_executable(path: Path) -> bool:
-    return path.suffix == ".sh" or path.name == "shiz" or os.access(path, os.X_OK)
+    # os.access answers for the *packing* tree; shiz/ui ship without a suffix and
+    # the mode is applied again by the app on the way in (see Payload.executableEntry).
+    return path.suffix == ".sh" or path.name in ("shiz", "ui", "ball") or os.access(path, os.X_OK)
+
+
+# Payload-only runtime files: they belong in the rootfs (and therefore in the
+# APK's payload), but not in every incremental hot package.
+#
+#   usr/local/bin/pnpm  the 41 MB self-contained pnpm binary that fulfils
+#                       "预装 pnpm" (issue #4). Carrying it here would make every
+#                       hot package 41 MB instead of ~300 KB, and pnpm is a
+#                       versioned tool that travels with the runtime line
+#                       (t<N>), not with a plugin fix. Guests get it from the
+#                       payload; the hot overlay only ever updates the small,
+#                       frequently-changed things.
+HOT_EXCLUDED = ("usr/local/bin/pnpm",)
 
 
 def add_tree(archive: zipfile.ZipFile, root: Path, prefix: str) -> int:
@@ -70,7 +88,10 @@ def add_tree(archive: zipfile.ZipFile, root: Path, prefix: str) -> int:
         for name in sorted(filenames):
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
-            count += add_file(archive, path, f"{prefix}/{rel}")
+            arcname = f"{prefix}/{rel}"
+            if arcname in HOT_EXCLUDED:
+                continue
+            count += add_file(archive, path, arcname)
     return count
 
 
@@ -156,6 +177,8 @@ def main() -> None:
         # Distro files we deliberately adjust (see payload/etc/): applied on every
         # launch so a fix here does not force a 400 MB payload re-extraction.
         written += add_tree(archive, root / "payload" / "etc", "etc")
+        # guest commands: small, agent-facing, and worth a hot fix
+        written += add_tree(archive, root / "payload" / "usr" / "local" / "bin", "usr/local/bin")
         # guest home files (skills, instructions): "@home/" maps to the guest's
         # /root, which is a bind mount the rootfs cannot reach.
         written += add_tree(archive, root / "payload" / "home", "@home")

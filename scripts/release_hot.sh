@@ -20,6 +20,10 @@ REPO="${DSH_REPO:-itiswdwa/dsh-android}"
 API="https://api.github.com/repos/$REPO"
 BUILD="$ROOT/build"
 
+# Two releases at once (or the same one twice) interleave their asset deletes and
+# uploads; see scripts/_release_lock.sh.
+. "$ROOT/scripts/_release_lock.sh"
+
 [ -n "${GITHUB_TOKEN:-}" ] || { echo "缺少 GITHUB_TOKEN（发布需要 contents:write）" >&2; exit 1; }
 AUTH="Authorization: Bearer $GITHUB_TOKEN"
 ACCEPT="Accept: application/vnd.github+json"

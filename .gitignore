@@ -26,3 +26,11 @@ app/res/values-night/icon_background.xml
 node_modules/
 *.log
 .DS_Store
+
+# 取回来的运行时工件，不进 git（见 scripts/fetch-pnpm.sh）：41MB 的自包含 pnpm 二进制，
+# 只有升级 pnpm 才会变。payload 组装时按固定版本 + 双哈希校验下载。
+payload/usr/local/bin/pnpm
+
+# Python 缓存（make_hot_zip 被 import 过会生成）
+__pycache__/
+*.pyc

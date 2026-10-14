@@ -350,4 +350,26 @@ public final class Assist extends AccessibilityService {
     static void deliver(String text) {
         MainActivity.deliverPrompt(text);
     }
+
+    /**
+     * Hand the ball's words to its own conversation.
+     *
+     * The app only queues them; the plugin drains the queue into a dedicated
+     * session (installBallInbox). If nothing claims them within a few seconds — an
+     * older shell, a harness that is not running, a plugin that did not load — they
+     * fall back to the old path, pasting into the conversation on screen, rather
+     * than being swallowed.
+     */
+    static void deliverToBall(String text) {
+        if (text == null || text.trim().isEmpty()) return;
+        final int id = BallInbox.add(text);
+        if (id < 0) return;
+        BallService.onDeliveryResult("ball");
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (BallInbox.claimed(id)) return;
+            BallInbox.drop(id);
+            App.log("ball inbox: nobody claimed it in time, pasting instead");
+            deliver(text);
+        }, 5000);
+    }
 }

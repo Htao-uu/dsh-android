@@ -15,14 +15,18 @@ MESSAGE="${1:-更新}"
 
 [ -d "$REPO/.git" ] || { echo "no git checkout at $REPO" >&2; exit 1; }
 
-for dir in app assets patches payload plugin profile scripts docs; do
+for dir in .github app assets patches payload plugin profile scripts docs; do
   rm -rf "$REPO/$dir"
   cp -a "$SRC/$dir" "$REPO/$dir"
 done
-cp "$SRC/README.md" "$SRC/THIRD_PARTY.md" "$SRC/.gitignore" "$SRC/CHANGELOG.md" "$REPO/"
-# VERSION and update.json are release metadata: the app reads the manifest to
-# decide whether a hot package or a new APK is waiting.
-cp "$SRC/VERSION" "$SRC/update.json" "$SRC/HOT" "$REPO/" 2>/dev/null || true
+cp "$SRC/README.md" "$SRC/THIRD_PARTY.md" "$SRC/.gitignore" "$SRC/CHANGELOG.md" "$SRC/HANDOFF.md" "$REPO/"
+# The three version files travel together: VERSION (shell), ROOTFS_VERSION
+# (terminal) and HOT (the last hot package built here). VERSION and update.json
+# are what the app reads to decide whether a hot package or a new APK is waiting.
+# ROOTFS_VERSION was missing from this list, which is how the t2 runtime got
+# published while the repository still had no record of a terminal version at
+# all — version.py in the checkout then falls back to t1.
+cp "$SRC/VERSION" "$SRC/ROOTFS_VERSION" "$SRC/update.json" "$SRC/HOT" "$REPO/" 2>/dev/null || true
 
 cd "$REPO"
 # Generated artefacts (icons, BuildInfo, payloads) are ignored on purpose; drop

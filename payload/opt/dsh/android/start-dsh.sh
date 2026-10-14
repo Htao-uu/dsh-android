@@ -45,9 +45,33 @@ mkdir -p "$DSH_HOME/.dsh"
 # First run in a fresh home: seed the preinstalled profile (the app's plugin
 # rows) from the immutable payload copy, so user edits afterwards persist.
 # $HOME is a bind mount from app storage, so it hides the rootfs's own /root.
-if [ ! -d "$DSH_HOME/.dsh/profiles/web" ] && [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
+#
+# The gate is the file the profile needs, not the directory: the app writes the
+# baked hot overlay *before* this script runs (MainActivity: Payload.applyHot()
+# then DshService.ensure()), and that overlay creates
+# `profiles/web/node_modules/dsh-plugin-android/` — so the directory already
+# exists on a brand-new install and a `[ ! -d ... ]` gate skipped the seeding
+# entirely. The plugin then never entered the profile's bundles or patch layer,
+# and a fresh install had neither the 「安卓沙箱」 settings page nor the terminal
+# button — with both of the ways to fix that living inside the plugin that never
+# loaded (reported as issue #3).
+#
+# A file gate also repairs the devices that shipped broken: `package.json` is
+# still missing there, so the next start seeds them.
+if [ ! -f "$DSH_HOME/.dsh/profiles/web/package.json" ] && [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
   echo "start-dsh: seeding $DSH_HOME/.dsh from payload"
   cp -a "$DSH_INSTALL/dsh-home-seed/." "$DSH_HOME/.dsh/"
+fi
+
+# Top up a profile that already exists. The copy above is wholesale (and only
+# once, because the bundle list in package.json is the user's), so a build that
+# adds a bundle row or a plugin patch row would otherwise never reach an
+# installed device. This one is per file and append-only: missing files are
+# copied, missing rows are added, existing content is never rewritten, and any
+# failure is logged and ignored rather than blocking the boot.
+if [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
+  "$NODE" "$DSH_INSTALL/android/repair-profile.mjs" \
+    "$DSH_INSTALL/dsh-home-seed" "$DSH_HOME" 2>&1 | sed 's/^/start-dsh: /' || true
 fi
 
 # The plugin is app code, not user data: refresh it on every start so an app

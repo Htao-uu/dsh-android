@@ -7,6 +7,11 @@
 # executed through qemu with the staged Debian loader prefix.
 set -eu
 
+# Every external tool and key path is overridable, because a CI runner has none of
+# this machine's layout: it brings its own Android SDK (aapt2 / android.jar / d8),
+# its own apksig jar, its own libproot.so and its own keystore. Unset, each default
+# is exactly what this device uses — local builds do not change.
+#
 # The tree this script lives in, so a clone builds wherever it is checked out.
 # Override with DSH_SRC_DIR when driving it from a separate build directory.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,11 +22,11 @@ TERMINAL_VERSION="${TERMINAL_VERSION:-$(cat "$ROOT/ROOTFS_VERSION" 2>/dev/null |
 APP="$ROOT/app"
 BUILD="$ROOT/build"
 OUT="$ROOT/out"
-ANDROID_JAR=/tmp/platform/android-36/android.jar
-AAPT2=/tmp/aapt2dir/aapt2
-D8=/tmp/r8.jar
-APKSIG=/tmp/apksig.jar
-PROOT=/var/minis/mounts/Download/libproot.so
+ANDROID_JAR="${ANDROID_JAR:-/tmp/platform/android-36/android.jar}"
+AAPT2="${AAPT2:-/tmp/aapt2dir/aapt2}"
+D8="${D8:-/tmp/r8.jar}"
+APKSIG="${APKSIG:-/tmp/apksig.jar}"
+PROOT="${PROOT:-/var/minis/mounts/Download/libproot.so}"
 
 SRC_JAVA="$APP/java"
 LIBS="$APP/libs"
@@ -30,7 +35,7 @@ CLASSES="$BUILD/classes"
 RES_FLAT="$BUILD/res-flat"
 KEYSTORE="$ROOT/keystore/dsh.p12"
 KS_PASS="${KS_PASS:-dshandroid}"   # override when building your own release
-KS_ALIAS=dsh
+KS_ALIAS="${KS_ALIAS:-dsh}"
 
 mkdir -p "$OUT" "$BUILD" "$DEX_DIR" "$CLASSES/shizuku" "$RES_FLAT"
 

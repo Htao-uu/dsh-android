@@ -17,7 +17,11 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
-ROOTFS="${DSH_ROOTFS:-$BUILD/rootfs}"
+# prepare_rootfs.sh produces build/rootfs-ubuntu/ (docs/BUILD.md calls this script
+# with no environment set), so that is the default. It used to say build/rootfs,
+# a tree nothing produces any more: the sanity check below would fail on a stale
+# or half-built rootfs with "MISSING: usr/local/bin/node" and no explanation.
+ROOTFS="${DSH_ROOTFS:-$BUILD/rootfs-ubuntu}"
 ASSETS="$BUILD/payload-assets"
 
 [ -d "$ROOTFS" ] || { echo "no $ROOTFS — build the rootfs first" >&2; exit 1; }
@@ -27,6 +31,12 @@ echo "== link shim =="
 # inside the guest; the shim is built here so the payload never ships a stale or
 # missing copy. See payload/opt/dsh/android/linkfix.c.
 sh "$ROOT/scripts/build_linkfix.sh"
+
+echo "== pnpm (fetched, not committed) =="
+# The payload ships a preinstalled pnpm (issue #4). The binary is 41 MB, so it is
+# fetched here with a pinned version and verified hashes instead of living in git
+# — the same step CI runs.
+sh "$ROOT/scripts/fetch-pnpm.sh"
 
 echo "== overlay / =="
 cp -a "$ROOT/payload/." "$ROOTFS/"
@@ -62,6 +72,7 @@ for f in opt/dsh/android/pty-server.mjs \
          opt/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.css \
          opt/dsh/node_modules/node-addon-require-builtin/lib/index.js \
          usr/local/bin/node bin/bash \
+         usr/local/bin/pnpm \
          usr/local/bin/node \
          opt/dsh/dsh-home-seed/profiles/web/cordis.patch.yml \
          opt/dsh/dsh-home-seed/profiles/web/cordis.patch.yml \

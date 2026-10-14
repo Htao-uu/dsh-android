@@ -107,6 +107,28 @@ window.__ModuleLoader__.load({
 			termConnecting: "正在连接…",
 			termDisconnected: "连接已断开",
 			termUnavailable: "终端不可用：本页没有连到 DSH Android 应用的沙箱 PTY 服务（在电脑浏览器里打开时正常）。",
+			termReconnect: "重连",
+			termError: "终端错误",
+			termExited: "进程已退出（{code}）",
+			termInputLabel: "终端输入",
+			termCopy: "复制",
+			termCopied: "已复制",
+			termCopyHint: "先在屏幕上长按选中要复制的文字",
+			termPasteHint: "读不到剪贴板，请长按终端里的输入区粘贴",
+			termJumpToBottom: "回到最新输出",
+			termTabName: "终端 {n}",
+			termNewTab: "新建终端",
+			termCloseTab: "关闭这个终端",
+			termTabLimit: "最多同时开 {max} 个终端，先关掉一个",
+			termKeyEsc: "Esc 键",
+			termKeyTab: "Tab 键",
+			termKeyCtrl: "Ctrl 组合键：点一下点亮，再按一个字母",
+			termKeyLeft: "光标左移",
+			termKeyUp: "上一条命令",
+			termKeyDown: "下一条命令",
+			termKeyRight: "光标右移",
+			termKeyInterrupt: "中断当前命令（Ctrl+C）",
+			termKeyboardHint: "键盘被收起了：点一下终端再输入",
 			inUse: "当前使用",
 			builtIn: "内置",
 			saved: "已保存",
@@ -125,11 +147,24 @@ window.__ModuleLoader__.load({
 			phoneDenied: "未允许",
 			phoneBall: "悬浮球",
 			phoneBallHint: "按住说话（松开即发送），点一下在旁边弹出输入框；拖动可移动，消息会在球上方冒泡显示。",
-			phoneBallSize: "大小（dp）",
+			phoneBallLook: "外观",
+			phoneBallLookHint: "这里改的是球的样子和大小；球体本身的材质、阴影与原生动效在外壳里，热包换不掉。",
+			phoneBallSize: "大小",
+			phoneBallSizeHint: "40–120 dp；松手即生效（球会重画一次）。",
+			phoneBallSizeSmall: "小",
+			phoneBallSizeMedium: "标准",
+			phoneBallSizeLarge: "大",
+			phoneBallSizeHuge: "特大",
 			phoneBallImage: "图标",
 			phoneBallBuiltin: "内置（大肥鱼）",
 			phoneBallPick: "选择图片…",
-			phoneBallImageHint: "PNG/JPG，或 Android 矢量图 XML；换外观不用重装外壳。",
+			phoneBallImageHint: "预设随热包下发，是矢量图，放到多大都清晰；也可以自己挑一张 PNG/JPG。",
+			phoneBallCustom: "自定义图片：",
+			phoneBallPresetDeep: "深海鲸",
+			phoneBallPresetLine: "线条鲸",
+			phoneBallPresetSpark: "灵动",
+			phoneBallPresetBuiltin: "内置",
+			phoneBallPresetMissing: "预设文件还没在沙箱里（先在设置 →「检查更新」应用一次热包）。",
 			phoneBallOn: "已开启",
 			phoneBallOff: "已关闭",
 			phoneEnable: "开启",
@@ -138,7 +173,7 @@ window.__ModuleLoader__.load({
 			phoneTerminal: "终端更新可用 · t%s（需要安装新的 APK）",
 			hotPick: "选择本地热包…",
 			termMissing: "运行时未安装",
-			termMissingHint: "这个外壳不含 rootfs：下载一次即可（约 %s MB）。装好之后，外壳更新就只有几 MB。",
+			termMissingHint: "这个外壳不含运行时（rootfs），需要单独下载一次：点下面「下载运行时」，约 %s MB，直接下到 App 私有目录——你不用自己找位置、不用解压、不用手动导入。下完会自动导入，看到「已安装」后终端即可使用；失败会在这里写明原因（网络 / 空间不足 / 校验失败），再点一次重试即可。",
 			termDownload: "下载运行时",
 			hotPicked: "已选文件：%s",
 			portHint: "沙箱内 dsh web 监听的端口；改动在服务重启后生效。",
@@ -228,6 +263,28 @@ window.__ModuleLoader__.load({
 			termConnecting: "connecting…",
 			termDisconnected: "disconnected",
 			termUnavailable: "Terminal unavailable: this page is not connected to the DSH Android sandbox PTY service (expected in a desktop browser).",
+			termReconnect: "Reconnect",
+			termError: "terminal error",
+			termExited: "Process exited ({code})",
+			termInputLabel: "Terminal input",
+			termCopy: "Copy",
+			termCopied: "Copied",
+			termCopyHint: "Long-press the screen to select text first",
+			termPasteHint: "Clipboard unavailable — long-press the terminal to paste",
+			termJumpToBottom: "Jump to latest output",
+			termTabName: "Terminal {n}",
+			termNewTab: "New terminal",
+			termCloseTab: "Close this terminal",
+			termTabLimit: "At most {max} terminals at once — close one first",
+			termKeyEsc: "Escape key",
+			termKeyTab: "Tab key",
+			termKeyCtrl: "Ctrl chord: tap to arm, then a letter",
+			termKeyLeft: "Move cursor left",
+			termKeyUp: "Previous command",
+			termKeyDown: "Next command",
+			termKeyRight: "Move cursor right",
+			termKeyInterrupt: "Interrupt (Ctrl+C)",
+			termKeyboardHint: "Keyboard dismissed — tap the terminal to type again",
 			inUse: "in use",
 			builtIn: "bundled",
 			saved: "Saved",
@@ -246,11 +303,24 @@ window.__ModuleLoader__.load({
 			phoneDenied: "not granted",
 			phoneBall: "Floating ball",
 			phoneBallHint: "Hold to talk (sending on release); tap for an input box beside it. Drag to move; the bubble above it reports what happened.",
-			phoneBallSize: "Size (dp)",
+			phoneBallLook: "Appearance",
+			phoneBallLookHint: "This changes the mark and the size only; the ball's material, shadow and native motion live in the shell, where a hot package cannot reach.",
+			phoneBallSize: "Size",
+			phoneBallSizeHint: "40–120 dp, applied on release (the ball is redrawn once).",
+			phoneBallSizeSmall: "Small",
+			phoneBallSizeMedium: "Standard",
+			phoneBallSizeLarge: "Large",
+			phoneBallSizeHuge: "Huge",
 			phoneBallImage: "Picture",
 			phoneBallBuiltin: "Built-in whale",
 			phoneBallPick: "Choose a picture…",
-			phoneBallImageHint: "PNG/JPG, or an Android vector XML — changing how it looks needs no shell update.",
+			phoneBallImageHint: "The presets ship with the hot package as vectors, so they stay sharp at any size; a PNG/JPG works too.",
+			phoneBallCustom: "Custom picture: ",
+			phoneBallPresetDeep: "Deep whale",
+			phoneBallPresetLine: "Outline whale",
+			phoneBallPresetSpark: "Spark",
+			phoneBallPresetBuiltin: "Built-in",
+			phoneBallPresetMissing: "Presets are not in the sandbox yet — apply the hot package once (Settings → Check for updates).",
 			phoneBallOn: "on",
 			phoneBallOff: "off",
 			phoneEnable: "Turn on",
@@ -401,6 +471,57 @@ window.__ModuleLoader__.load({
 .dsa-plainDot[data-state=error]{color:var(--dsw-alias-state-error-primary)}
 .dsa-plainDot[data-state=idle]{color:var(--dsw-alias-state-idle-primary)}
 .dsa-plainTag{display:inline-flex;align-items:center;padding:1px 8px;border:0.5px solid var(--dsw-alias-border-l4);border-radius:999px;font-size:11px;line-height:17px;font-weight:500;color:var(--dsw-alias-label-tertiary)}
+/* ---- floating ball: the appearance card ----
+   The ball is a native overlay drawn by BallService.java, so this preview has one
+   job: show the same thing the phone will show. Same fill (app/res/values*/colors.xml:
+   #4C6FFF by day, #3B5BFF at night — the day/night pair the harness theme already
+   mirrors here), same mark, same size/6 inset. Anything the preview cannot mirror
+   (material, shadow, native motion) is stated in the hint instead of faked. */
+.dsa-root{--dsa-ball-fill:#4C6FFF;--dsa-ball-stroke:rgba(255,255,255,0.2)}
+html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
+.dsa-ballRow{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.dsa-ballStage{position:relative;flex:none;width:148px;height:148px;display:grid;place-items:center;border-radius:var(--dsw-radius-xl);border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.dsa-ballHalo{position:absolute;width:108px;height:108px;border-radius:50%;background:radial-gradient(circle,rgba(76,111,255,0.26) 0%,rgba(76,111,255,0) 70%)}
+.dsa-ball{position:relative;display:grid;place-items:center;border-radius:50%;background:var(--dsa-ball-fill);box-shadow:0 8px 20px rgba(38,63,166,0.32),inset 0 1px 0 rgba(255,255,255,0.34);animation:dsa-breathe 3.6s ease-in-out infinite}
+.dsa-ball svg{display:block}
+@keyframes dsa-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+@media (prefers-reduced-motion:reduce){.dsa-ball{animation:none}}
+.dsa-ballSide{display:flex;flex-direction:column;gap:12px;flex:1 1 240px;min-width:0}
+.dsa-ballChips{display:flex;gap:6px;flex-wrap:wrap}
+.dsa-ballChip{font:inherit;font-size:12px;line-height:18px;padding:4px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dsa-ballChip[aria-pressed=true]{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3)}
+.dsa-range{width:100%;height:22px;accent-color:var(--dsw-alias-state-business-primary)}
+.dsa-presets{display:flex;gap:8px;flex-wrap:wrap}
+.dsa-preset{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 10px;border-radius:var(--dsw-radius-md);border:0.5px solid var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:11px;line-height:16px}
+.dsa-preset[aria-pressed=true]{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3)}
+.dsa-presetMark{width:26px;height:26px;border-radius:50%;background:var(--dsa-ball-fill);display:grid;place-items:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.3)}
+.dsa-termHost{display:flex;flex:1;min-height:0;min-width:0}
+.dsv-root{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:18px;background:var(--dsv-bg);color:var(--dsv-fg);--dsv-bg:#14161a;--dsv-fg:#e8eaed;--dsv-cursor:#4c8dff;--dsv-cursor-accent:#10131a;--dsv-selection:#2c3a55;--dsv-compose:#243050}
+.dsv-viewport{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 8px 10px}
+.dsv-lines{position:relative;min-height:100%;white-space:pre;-webkit-user-select:text;user-select:text;font:inherit}
+.dsv-row{white-space:pre;min-height:18px;font:inherit;content-visibility:auto;contain-intrinsic-size:auto 18px}
+.dsv-row::selection,.dsv-row ::selection{background:var(--dsv-selection)}
+.dsv-caret{background:var(--dsv-cursor);color:var(--dsv-cursor-accent);border-radius:1px}
+.dsv-caret-off{outline:1px solid var(--dsv-cursor);outline-offset:-1px}
+.dsv-compose{background:var(--dsv-compose);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+.dsv-input{position:absolute;left:0;top:0;width:100%;height:18px;margin:0;padding:0;border:0;outline:none;background:transparent;color:transparent;caret-color:transparent;font:inherit;line-height:18px;white-space:pre;overflow:hidden;resize:none}
+.dsv-keys{display:flex;align-items:center;gap:6px;flex:none;padding:5px 8px;border-top:0.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);overflow-x:auto;overscroll-behavior-x:contain}
+.dsv-key{flex:none;font:inherit;font-size:12px;line-height:16px;padding:4px 10px;border-radius:6px;border:0.5px solid var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dsv-key[aria-pressed=true]{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3)}
+.dsv-tabs{display:flex;align-items:center;gap:6px;flex:none;padding:6px 8px;overflow-x:auto;overscroll-behavior-x:contain;border-bottom:0.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
+.dsv-tab{display:flex;align-items:center;flex:none;border:0.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);overflow:hidden}
+.dsv-tab[data-active=true]{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-3)}
+.dsv-tabLabel{display:flex;align-items:center;gap:6px;flex:none;min-height:32px;padding:0 8px;border:0;background:transparent;font:inherit;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap}
+.dsv-tab[data-active=true] .dsv-tabLabel{color:var(--dsw-alias-label-primary)}
+.dsv-tabClose{flex:none;width:30px;min-height:32px;padding:0;border:0;border-left:0.5px solid var(--dsw-alias-border-l3);background:transparent;font:inherit;font-size:15px;line-height:1;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dsv-tabAdd{flex:none;width:34px;min-height:32px;padding:0;border:0.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:transparent;font:inherit;font-size:17px;line-height:1;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dsv-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-idle-primary)}
+.dsv-dot[data-state=ready]{background:var(--dsw-alias-state-success-primary)}
+.dsv-dot[data-state=connecting]{background:var(--dsw-alias-state-warn-primary)}
+.dsv-dot[data-state=error]{background:var(--dsw-alias-state-error-primary)}
+.dsv-jump{position:absolute;right:10px;bottom:10px;width:30px;height:30px;border-radius:15px;border:0.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:14px;line-height:1;display:none;box-shadow:0 2px 8px rgba(0,0,0,0.18)}
+.dsv-jump[data-visible=true]{display:block}
+@keyframes dsv-blink{0%,49%{opacity:1}50%,100%{opacity:0.35}}
 `;
 
 		/** Mount the page stylesheet once, and take it away when the plugin goes. */
@@ -846,8 +967,19 @@ window.__ModuleLoader__.load({
 										variant: "primary",
 										disabled: props.terminalBusy === true,
 										onClick: () => call("/terminal/fetch", {
-											url: info !== null && info.terminal !== undefined ? info.terminal.url : "",
-											manifest: info !== null && info.terminal !== undefined ? info.terminal.manifest : ""
+											// These come from the update manifest, which is empty on a
+											// machine that never checked for updates — exactly the
+											// "I installed the slim shell and cannot find the runtime"
+											// case this card exists for. Fall back to the release
+											// asset so the button always has somewhere to go.
+											// NOTE: `latest` currently resolves to the t2 release and
+											// payload.zip is published there, so this URL is right
+											// today; if a newer terminal release appears, repoint the
+											// fallback (the manifest path above stays correct).
+											url: (info !== null && info.terminal !== undefined && info.terminal.url)
+												|| "https://github.com/itiswdwa/dsh-android/releases/latest/download/payload.zip",
+											manifest: (info !== null && info.terminal !== undefined && info.terminal.manifest)
+												|| "https://github.com/itiswdwa/dsh-android/releases/latest/download/payload.manifest"
 										})
 									}, t("termDownload")))))
 						: null,
@@ -997,6 +1129,100 @@ window.__ModuleLoader__.load({
 		 * it buys and hands the user to the right screen. The screen-control
 		 * channel the agent actually calls is `ui` (see the phone-control skill).
 		 */
+		/**
+		 * The floating ball's marks, as shipped by the hot package.
+		 *
+		 * These live in the payload at opt/dsh/android/ball/<file>.png and reach
+		 * the ball through /ball/config: BallService reads the file out of the
+		 * app's own storage with BitmapFactory, which is why a new mark is a hot
+		 * package away and not a shell release. (PNG, not vector XML: a file-based
+		 * vector cannot be parsed — VectorDrawable.createFromXml needs an
+		 * aapt-compiled parser and throws ClassCastException on anything else, and
+		 * BallService falls back to the built-in whale without saying so.)
+		 * What makes the file addressable from the page is /snapshot: each distro
+		 * carries its host path (distros[].path), and the ball needs a host path,
+		 * not a guest one.
+		 *
+		 * The path data below mirrors those XML files so the page can draw the
+		 * same shape — a page cannot read the guest filesystem, so it is a copy.
+		 * Keep both sides in step; the built-in mark is extracted from
+		 * app/res/drawable/ic_whale_monochrome.xml at authoring time for the same
+		 * reason.
+		 */
+		const BALL_PRESETS = [
+			{
+				id: "deep",
+				file: "whale-deep.png",
+				label: "phoneBallPresetDeep",
+				paths: [
+					{ d: "M5.6,27.2 C5.6,20.2 12.4,15.4 21.6,15.4 C30.8,15.4 37.6,20.2 37.6,27.2 C37.6,33.4 30.8,37.6 21.6,37.6 C12.4,37.6 5.6,33.4 5.6,27.2 Z M14.4,23.4 m-2.1,0 a2.1,2.1 0 1,0 4.2,0 a2.1,2.1 0 1,0 -4.2,0 Z", fill: "#FFFFFF", fillRule: "evenodd" },
+					{ d: "M8.8,30.6 C13.4,34.8 20.6,35.8 26.8,33.6 C23,36.8 13.8,36.2 8.8,30.6 Z", fill: "#FFFFFF", opacity: 0.45 },
+					{ d: "M36,21.2 L45.4,13.6 C43.8,19.2 43.8,24.8 45.4,30.6 L36,25.8 Z", fill: "#FFFFFF" },
+					{ d: "M13.2,9.8 m-1.9,0 a1.9,1.9 0 1,0 3.8,0 a1.9,1.9 0 1,0 -3.8,0 Z", fill: "#FFFFFF", opacity: 0.9 },
+					{ d: "M19.6,6.4 m-1.4,0 a1.4,1.4 0 1,0 2.8,0 a1.4,1.4 0 1,0 -2.8,0 Z", fill: "#FFFFFF", opacity: 0.65 }
+				]
+			},
+			{
+				id: "line",
+				file: "whale-line.png",
+				label: "phoneBallPresetLine",
+				paths: [
+					{ d: "M5.8,27 C5.8,20.4 12.6,15.6 21.6,15.6 C30.6,15.6 37.4,20.4 37.4,27 C37.4,33.2 30.6,37.4 21.6,37.4 C12.6,37.4 5.8,33.2 5.8,27 Z", stroke: "#FFFFFF", strokeWidth: 2.4 },
+					{ d: "M35.6,21.6 L44.8,14.2 C43.2,19.4 43.2,24.6 44.8,30.2 L35.6,25.6", stroke: "#FFFFFF", strokeWidth: 2.4 },
+					{ d: "M14.4,23.6 m-1.7,0 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0 Z", fill: "#FFFFFF" },
+					{ d: "M12.6,11.2 C12.2,8.8 14,7.2 16.4,7.6 C18.4,8 19.6,9.6 19.4,11.4", stroke: "#FFFFFF", strokeWidth: 2.2, strokeOpacity: 0.75 }
+				]
+			},
+			{
+				id: "spark",
+				file: "spark.png",
+				label: "phoneBallPresetSpark",
+				paths: [
+					{ d: "M22.4,5.2 C24.4,15.2 26.8,18.2 35.6,20.4 C26.8,22.6 24.4,25.6 22.4,35.6 C20.4,25.6 18,22.6 9.2,20.4 C18,18.2 20.4,15.2 22.4,5.2 Z", fill: "#FFFFFF" },
+					{ d: "M34.6,31.4 C35.5,35.8 36.5,37.1 40.2,38 C36.5,38.9 35.5,40.2 34.6,44.6 C33.7,40.2 32.7,38.9 29,38 C32.7,37.1 33.7,35.8 34.6,31.4 Z", fill: "#FFFFFF", opacity: 0.7 }
+				]
+			},
+			{
+				// The app's own drawable: chosen by clearing the pref, never by a path.
+				id: "builtin",
+				file: "",
+				label: "phoneBallPresetBuiltin",
+				builtin: true,
+				paths: [
+					{ d: "M48.8354 10.0479C48.3232 9.79199 48.1025 10.2798 47.8032 10.5278C47.7007 10.6079 47.6143 10.7119 47.5273 10.8076C46.7793 11.624 45.9048 12.1597 44.7622 12.0957C43.0923 12 41.666 12.5356 40.4058 13.8398C40.1377 12.2319 39.2476 11.272 37.8926 10.6558C37.1836 10.3359 36.4668 10.0156 35.9702 9.31982C35.6235 8.82373 35.5293 8.27197 35.356 7.72754C35.2456 7.3999 35.1353 7.06396 34.7651 7.00781C34.3633 6.94385 34.2056 7.2876 34.0479 7.57568C33.418 8.75195 33.1733 10.0479 33.1973 11.3599C33.2524 14.312 34.4736 16.6641 36.8999 18.3359C37.1758 18.5278 37.2466 18.7197 37.1597 19C36.9946 19.5757 36.7974 20.1357 36.624 20.7119C36.5137 21.0801 36.3486 21.1597 35.9624 21C34.6309 20.4321 33.481 19.5918 32.4644 18.5757C30.7393 16.8721 29.1792 14.9917 27.2334 13.52C26.7764 13.1758 26.3193 12.856 25.8467 12.5518C23.8618 10.584 26.1069 8.96777 26.627 8.77588C27.1704 8.57568 26.8159 7.8877 25.0591 7.896C23.3022 7.90381 21.6953 8.50391 19.647 9.30371C19.3477 9.42383 19.0322 9.51172 18.7095 9.58398C16.8501 9.22363 14.9199 9.14355 12.9033 9.37598C9.10596 9.80762 6.07275 11.6396 3.84326 14.7681C1.16455 18.5278 0.53418 22.7998 1.30664 27.2559C2.11768 31.9521 4.46582 35.8398 8.07373 38.8799C11.8159 42.0322 16.1255 43.5762 21.041 43.2803C24.0269 43.104 27.3516 42.6963 31.1016 39.4561C32.0469 39.936 33.0396 40.1279 34.686 40.272C35.9546 40.3921 37.1758 40.208 38.1211 40.0078C39.6021 39.688 39.4995 38.2881 38.9639 38.0322C34.623 35.9678 35.5762 36.8081 34.71 36.1279C36.9155 33.4639 40.2402 30.6958 41.54 21.728C41.6426 21.0161 41.5557 20.5679 41.54 19.9917C41.5322 19.6396 41.6108 19.5039 42.0049 19.4639C43.0923 19.3359 44.1479 19.0317 45.1167 18.4878C47.9292 16.9199 49.064 14.3438 49.3315 11.2559C49.3711 10.7837 49.3237 10.2959 48.8354 10.0479ZM24.3262 37.8398C20.1196 34.4639 18.0791 33.3521 17.2358 33.3999C16.4482 33.4482 16.5898 34.3682 16.7632 34.9678C16.9443 35.5601 17.1812 35.9683 17.5117 36.4878C17.7402 36.832 17.8979 37.3442 17.2832 37.728C15.9282 38.584 13.5728 37.4399 13.4624 37.3838C10.7207 35.7358 8.42822 33.5601 6.81348 30.584C5.25342 27.7197 4.34766 24.6479 4.19775 21.3677C4.1582 20.5757 4.38672 20.2959 5.15869 20.1519C6.17529 19.96 7.22314 19.9199 8.23926 20.0718C12.5327 20.7119 16.1885 22.6719 19.2529 25.7759C21.002 27.5439 22.3252 29.6558 23.6885 31.7202C25.1377 33.9121 26.6978 36 28.6831 37.7119C29.3843 38.312 29.9434 38.7681 30.479 39.104C28.8643 39.2881 26.1699 39.3281 24.3262 37.8398ZM26.3433 24.6001C26.3433 24.248 26.6191 23.9678 26.9658 23.9678C27.0444 23.9678 27.1152 23.9839 27.1782 24.0078C27.2651 24.04 27.3438 24.0879 27.4067 24.1602C27.5171 24.272 27.5801 24.4321 27.5801 24.6001C27.5801 24.9521 27.3042 25.2319 26.9575 25.2319C26.6108 25.2319 26.3433 24.9521 26.3433 24.6001ZM32.6064 27.8799C32.2046 28.0479 31.8027 28.1919 31.4165 28.208C30.8179 28.2397 30.1641 27.9922 29.8096 27.688C29.2583 27.2158 28.8643 26.9521 28.6987 26.1279C28.6279 25.7759 28.6675 25.2319 28.7305 24.9199C28.8721 24.248 28.7144 23.8159 28.2495 23.4238C27.8716 23.104 27.3911 23.0161 26.8633 23.0161C26.666 23.0161 26.4849 22.9277 26.3511 22.856C26.1304 22.7441 25.9492 22.4639 26.1226 22.1201C26.1777 22.0078 26.4458 21.7358 26.5088 21.688C27.2256 21.272 28.0527 21.4077 28.8169 21.7197C29.5259 22.0161 30.0615 22.5601 30.834 23.3281C31.6216 24.2559 31.7632 24.5117 32.2124 25.208C32.5669 25.752 32.8901 26.312 33.1104 26.9521C33.2446 27.3521 33.0713 27.6802 32.6064 27.8799Z", fill: "#FFFFFF", group: "translate(25.92,25.92) scale(1.1232)" }
+				]
+			}
+		];
+
+		/** One mark, drawn at whatever size the caller asks for. */
+		function BallMark(props) {
+			const size = props.size;
+			const paths = (props.paths ?? []).map((path, index) => h("path", {
+				key: index,
+				d: path.d,
+				fill: path.fill ?? "none",
+				fillRule: path.fillRule,
+				fillOpacity: path.opacity,
+				stroke: path.stroke,
+				strokeWidth: path.strokeWidth,
+				strokeOpacity: path.strokeOpacity,
+				strokeLinecap: path.stroke === undefined ? undefined : "round",
+				strokeLinejoin: path.stroke === undefined ? undefined : "round"
+			}));
+			const grouped = (props.paths ?? []).some((path) => path.group !== undefined);
+			return h("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 48 48",
+				"aria-hidden": "true",
+				focusable: "false"
+			}, grouped
+				? (props.paths ?? []).map((path, index) => path.group === undefined
+					? paths[index]
+					: h("g", { key: index, transform: path.group }, paths[index]))
+				: paths);
+		}
+
 		function PhoneCard(props) {
 			const t = props.t;
 			const [state, setState] = react.useState(null);
@@ -1010,15 +1236,46 @@ window.__ModuleLoader__.load({
 					.then(([access, snapshot]) => {
 						if (cancelled) return;
 						const ball = (snapshot && snapshot.ball) || {};
+						// A ball picture is a path in the *app's* filesystem, not
+						// the guest's: the presets ship inside the rootfs, so the
+						// page needs that rootfs' host path to point the ball at
+						// one. /snapshot carries it per distro.
+						const distros = Array.isArray(snapshot && snapshot.distros) ? snapshot.distros : [];
+						const active = distros.find((item) => item && item.active === true) || distros[0] || null;
 						setState(Object.assign({}, access, {
 							size: ball.size,
-							image: ball.image || ""
+							image: ball.image || "",
+							distroPath: active !== null && typeof active.path === "string" ? active.path : ""
 						}));
 						setBallSize(String(ball.size === undefined ? 58 : ball.size));
 					})
 					.catch(() => { if (!cancelled) setState({}); });
 				return () => { cancelled = true; };
 			}, [props.tick]);
+
+			// Each appearance change restarts the overlay (BallService.reload), so a
+			// dragged slider must not post once per pixel: debounce, and commit on
+			// release.
+			const sizeTimer = react.useRef(null);
+			react.useEffect(() => () => {
+				if (sizeTimer.current !== null) clearTimeout(sizeTimer.current);
+			}, []);
+			const applySize = (value, immediate) => {
+				const size = Math.max(40, Math.min(120, parseInt(String(value), 10) || 58));
+				setBallSize(String(size));
+				if (sizeTimer.current !== null) {
+					clearTimeout(sizeTimer.current);
+					sizeTimer.current = null;
+				}
+				if (immediate) {
+					ask("/ball/config", { size });
+					return;
+				}
+				sizeTimer.current = setTimeout(() => {
+					sizeTimer.current = null;
+					ask("/ball/config", { size });
+				}, 450);
+			};
 
 			const ask = async (path, body) => {
 				try {
@@ -1041,6 +1298,27 @@ window.__ModuleLoader__.load({
 
 			const ball = state.ball === true;
 			const image = state.image || "";
+			const distroPath = state.distroPath || "";
+			// <rootfs host path>/opt/dsh/android/ball/<file>.xml — where the hot package
+			// drops the presets (payload/opt/dsh/android/ball/). The ball needs a host
+			// path, so this is built from /snapshot's distros[].path.
+			const presetPath = (preset) => (distroPath === "" ? "" : distroPath + "/opt/dsh/android/ball/" + preset.file);
+			const ballDp = Math.max(40, Math.min(120, parseInt(String(ballSize), 10) || 58));
+			const selected = BALL_PRESETS.find((preset) => preset.builtin
+				? image === ""
+				: image !== "" && image === presetPath(preset)) ?? null;
+			const custom = image !== "" && selected === null;
+			// 1 CSS px is about 1 dp in this WebView, so the stage shows the real size;
+			// it is clamped only so a 120 dp ball still fits the card.
+			const previewPx = Math.min(128, ballDp);
+			const markPx = Math.max(14, Math.round(previewPx * 2 / 3));
+			const sizeChip = (label, dp) => h("button", {
+				key: dp,
+				type: "button",
+				className: "dsa-ballChip",
+				"aria-pressed": ballDp === dp,
+				onClick: () => applySize(dp, true)
+			}, label + " " + dp);
 			return h("div", null,
 				h(Group, { title: t("phoneTitle") },
 					h(Card, null,
@@ -1062,35 +1340,378 @@ window.__ModuleLoader__.load({
 							}, ball ? t("phoneDisable") : t("phoneEnable")))),
 
 					h(Card, null,
-						h("div", { className: "dsa-field" },
-							h("label", { className: "dsa-fieldLabel" }, t("phoneBallSize")),
-							h("div", { className: "dsa-inputRow" },
-								h(TextInput, {
-									inputMode: "numeric",
-									value: String(ballSize ?? ""),
-									onChange: (event) => setBallSize(event.target.value)
-								}),
-								h(Button, {
-									variant: "outline",
-									onClick: () => {
-										const size = parseInt(String(ballSize), 10);
-										return ask("/ball/config", { size: Number.isFinite(size) ? size : 58 });
-									}
-								}, t("save")))),
-						h("div", { className: "dsa-field" },
-							h("label", { className: "dsa-fieldLabel" }, t("phoneBallImage")),
-							h("p", { className: "dsa-hint" }, image === "" ? t("phoneBallBuiltin") : image),
-							h("div", { className: "dsa-actions" },
-								h(Button, {
-									variant: "outline", size: "sm",
-									onClick: () => ask("/ball/pick-image", {})
-								}, t("phoneBallPick")),
-								image === "" ? null : h(Button, {
-									variant: "ghost", size: "sm",
-									onClick: () => ask("/ball/config", { image: "" })
-								}, t("remove"))),
-							h("p", { className: "dsa-hint" }, t("phoneBallImageHint"))))));
+						h("div", { className: "dsa-ballRow" },
+							h("div", { className: "dsa-ballStage" },
+								h("div", { className: "dsa-ballHalo" }),
+								h("div", {
+									className: "dsa-ball",
+									style: { width: previewPx + "px", height: previewPx + "px" }
+								}, selected === null ? null : h(BallMark, { size: markPx, paths: selected.paths }))),
+							h("div", { className: "dsa-ballSide" },
+								h("div", { className: "dsa-field" },
+									h("label", { className: "dsa-fieldLabel" }, t("phoneBallSize") + " · " + ballDp + " dp"),
+									h("input", {
+										type: "range",
+										className: "dsa-range",
+										min: 40, max: 120, step: 1,
+										value: ballDp,
+										"aria-label": t("phoneBallSize"),
+										onChange: (event) => applySize(event.target.value, false),
+										onPointerUp: (event) => applySize(event.target.value, true),
+										onTouchEnd: (event) => applySize(event.target.value, true),
+										onKeyUp: (event) => applySize(event.target.value, true),
+										onBlur: (event) => applySize(event.target.value, true)
+									}),
+									h("div", { className: "dsa-ballChips" },
+										sizeChip(t("phoneBallSizeSmall"), 46),
+										sizeChip(t("phoneBallSizeMedium"), 58),
+										sizeChip(t("phoneBallSizeLarge"), 76),
+										sizeChip(t("phoneBallSizeHuge"), 96)),
+									h("p", { className: "dsa-hint" }, t("phoneBallSizeHint"))),
+								h("div", { className: "dsa-field" },
+									h("label", { className: "dsa-fieldLabel" }, t("phoneBallImage")),
+									h("div", { className: "dsa-presets" }, BALL_PRESETS.map((preset) => h("button", {
+										key: preset.id,
+										type: "button",
+										className: "dsa-preset",
+										"aria-pressed": selected !== null && selected.id === preset.id,
+										disabled: preset.builtin !== true && distroPath === "",
+										onClick: () => ask("/ball/config", { image: preset.builtin ? "" : presetPath(preset) })
+									},
+										h("span", { className: "dsa-presetMark", "data-builtin": preset.builtin === true },
+											h(BallMark, { size: 18, paths: preset.paths })),
+										t(preset.label)))),
+									custom ? h("p", { className: "dsa-hint dsa-mono" }, t("phoneBallCustom") + image) : null,
+									distroPath === "" ? h("p", { className: "dsa-hint" }, t("phoneBallPresetMissing")) : null,
+									h("div", { className: "dsa-actions" },
+										h(Button, {
+										variant: "outline", size: "sm",
+										onClick: () => ask("/ball/pick-image", {})
+										}, t("phoneBallPick"))),
+									h("p", { className: "dsa-hint" }, t("phoneBallImageHint")))))),
+					h("p", { className: "dsa-hint" }, t("phoneBallLookHint"))));
 		}
+
+		/* ==== @ball-inbox:begin — the ball's own thread: queue drain, identity, recovery. Tested by test/ball-inbox.test.mjs ==== */
+
+		/**
+		 * The `ball_doing` out of whatever reached this half.
+		 *
+		 * The protocol field is `ball_doing` (see the prompt section in index.js and
+		 * the `ball` command in the sandbox). A model may hand over a JSON object —
+		 * with or without a fenced block, and with other fields next to it — or just
+		 * the line itself; both are accepted, and the line is the fallback so a
+		 * plain report keeps working. An empty `ball_doing` means "nothing running".
+		 */
+		function ballDoing(raw) {
+			const text = String(raw ?? "").trim();
+			if (text === "") return "";
+			const start = text.indexOf("{");
+			const end = text.lastIndexOf("}");
+			if (start >= 0 && end > start) {
+				try {
+					const parsed = JSON.parse(text.slice(start, end + 1));
+					if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+						const value = parsed.ball_doing ?? parsed.doing;
+						if (typeof value === "string") return value.trim();
+					}
+				} catch {
+					/* not JSON: a literal newline inside a string is the usual
+					   reason, and the field can still be picked out by hand */
+				}
+				const field = /"ball_doing"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text);
+				if (field) return field[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+				return text;
+			}
+			return text;
+		}
+
+		/**
+		 * The floating ball's own conversation.
+		 *
+		 * Words spoken or typed into the ball are queued by the app (POST
+		 * /ball/inbox) and drained here, into a dedicated session: the ball gets a
+		 * thread of its own instead of dropping a sentence into whatever
+		 * conversation happened to be open. That thread runs with the same prompt
+		 * section, so it reports each step with `ball` and the bubble shows *its*
+		 * work — which is the "dedicated conversation" the ball was asked for.
+		 *
+		 * It goes through the same remote the UI uses (session.create / prompt /
+		 * rename), so this half is a hot package: the app only holds the words.
+		 */
+		function installBallInbox(ctx) {
+			const STORAGE_KEY = "dsh.android.ballSession";
+			const TITLE = "悬浮球";
+			// The id prefix is the host half's marker: `app:ball-surface` in
+			// lib/index.js checks it, alongside the pinned title, to know which
+			// session must lose the GUI question tools and run unapproached. A
+			// fresh ball thread is minted with it below.
+			const ID_PREFIX = "session-ball-";
+			/** One short wait, for the turn after a delivery to land in the log. */
+			const pause = (ms) => new Promise((resolve) => { globalThis.setTimeout(resolve, ms); });
+			const read = () => {
+				try {
+					return globalThis.localStorage.getItem(STORAGE_KEY) ?? "";
+				} catch (error) {
+					return "";
+				}
+			};
+			const remember = (id) => {
+				try {
+					globalThis.localStorage.setItem(STORAGE_KEY, id);
+				} catch (error) {
+					/* private mode: the session is simply created again next time */
+				}
+			};
+			const forget = () => {
+				try {
+					globalThis.localStorage.removeItem(STORAGE_KEY);
+				} catch (error) {
+					/* ignore */
+				}
+			};
+			const accepted = (result) => result !== null && result !== undefined && result.ok === true;
+			const payload = (result) => (result && result.value) || {};
+
+			let sessionId = read();
+			let busy = false;
+			let lastReport = "";
+			// Failures go through the status channel, not a swallowed promise: the
+			// first version drained nothing for ten minutes because the remote call
+			// threw into an empty catch. /ball/state also leaves the text readable
+			// (`GET /ball/state`) long after the bubble has faded.
+			//
+			// The field the ball shows is `ball_doing` (see `ball` in the sandbox and
+			// the prompt section in index.js). `text` is sent alongside it for older
+			// shells, and the value is parsed out of a JSON body when the caller
+			// hands one over.
+			const report = (text) => {
+				if (text === lastReport) return;
+				lastReport = text;
+				const doing = ballDoing(text).slice(0, 120);
+				call("/ball/state", { phase: "done", text: doing, ball_doing: doing }).catch(() => {});
+			};
+			const describe = (error) => {
+				if (error === null || error === undefined) return "unknown";
+				if (typeof error === "string") return error;
+				return error.message ? error.message : String(error);
+			};
+			/** The session namespace, reached whichever way this cordis exposes it. */
+			const sessionApi = () => {
+				const aggregate = ctx.remote;
+				if (aggregate !== null && aggregate !== undefined && aggregate.session !== undefined) {
+					return aggregate.session;
+				}
+				if (typeof ctx.get === "function") {
+					const direct = ctx.get("remote.session");
+					if (direct !== undefined && direct !== null) return direct;
+				}
+				return null;
+			};
+
+			/**
+			 * The directory the ball's conversation should own.
+			 *
+			 * `create({})` leaves `cwd` at the harness process's own directory —
+			 * on this phone `/opt/dsh`, the installation, which the surface
+			 * prompt tells the model to treat as read-only. So a task dispatched
+			 * from the ball used to start in the wrong place. The newest
+			 * top-level conversation is the best answer available to "where is
+			 * the user working"; the ball's own threads are skipped so the ball
+			 * cannot inherit the same wrong directory from itself. Anything
+			 * unexpected (no service, no list, no other session) leaves the field
+			 * off, which is exactly the behaviour that shipped before.
+			 */
+			const ballCwd = async () => {
+				try {
+					const api = sessionApi();
+					if (api === null || typeof api.list !== "function") return "";
+					const answer = await api.list({});
+					if (!accepted(answer)) return "";
+					const items = payload(answer).items;
+					if (!Array.isArray(items)) return "";
+					const others = items
+						.filter((item) => item !== null && typeof item === "object"
+							&& typeof item.cwd === "string" && item.cwd !== ""
+							&& item.origin !== "subagent" && item.parentSessionId === undefined
+							&& (item.projections && item.projections.values
+								? item.projections.values.title !== TITLE
+								: true))
+						.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+					return others.length > 0 ? others[0].cwd : "";
+				} catch (error) {
+					return "";
+				}
+			};
+
+			/** A fresh id for the ball's own thread: the prefix is the host's mark. */
+			const freshBallId = () => {
+				const suffix = (globalThis.crypto && globalThis.crypto.randomUUID)
+					? globalThis.crypto.randomUUID()
+					: Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+				return ID_PREFIX + suffix;
+			};
+
+			const open = async () => {
+				const api = sessionApi();
+				if (api === null) {
+					report("悬浮球会话：拿不到 remote.session 服务");
+					return "";
+				}
+				const cwd = await ballCwd();
+				// A caller-minted id is what makes the host's `session-ball-`
+				// marker work; an older controller may refuse it, and a refused
+				// create must not cost the ball its conversation, so fall back to
+				// a default id (the pinned title still marks the thread there).
+				const request = { sessionId: freshBallId(), ...(cwd === "" ? {} : { cwd }) };
+				let created = await api.create(request);
+				if (!accepted(created)) {
+					report("悬浮球会话：带标记 id 的 create 被拒，改用默认 id");
+					created = await api.create(cwd === "" ? {} : { cwd });
+				}
+				if (!accepted(created)) {
+					report("悬浮球会话：create 被拒 —— 看控制台");
+					return "";
+				}
+				const id = payload(created).sessionId ?? "";
+				if (id === "") {
+					report("悬浮球会话：create 没给出 id");
+					return "";
+				}
+				remember(id);
+				// Name it, so the sidebar says where the ball's words went. Cosmetic:
+				// an older controller may spell rename differently.
+				try {
+					const api = sessionApi();
+					if (api !== null && typeof api.rename === "function") {
+						await api.rename({ sessionId: id, title: TITLE });
+					}
+				} catch (error) {
+					/* keep going */
+				}
+				return id;
+			};
+
+			let lastError = "";
+			/**
+			 * Whether the ball's thread has stopped being usable.
+			 *
+			 * A session the user deleted from the sidebar is *archived*: the
+			 * controller still accepts the prompt, then refuses the turn at its
+			 * first step (`underArchivedSession` rejects in `agent/pre-step`), so
+			 * the ball would sit silent forever while its words pile up in a
+			 * thread nobody reads. The refusal is in the session's own log, so
+			 * the last turn is read back: a `blocked` end means this thread is
+			 * finished and the ball needs a new one.
+			 *
+			 * Unknown shapes are "not blocked": a thread is only abandoned on
+			 * positive evidence.
+			 */
+			const threadBlocked = async (id) => {
+				try {
+					const api = sessionApi();
+					if (api === null || typeof api.page !== "function" || typeof api.list !== "function") return false;
+					const listed = await api.list({});
+					if (!accepted(listed)) return false;
+					const items = payload(listed).items;
+					if (!Array.isArray(items)) return false;
+					const mine = items.find((item) => item !== null && typeof item === "object" && item.sessionId === id);
+					const throughSeq = mine && mine.projections ? mine.projections.asOfSeq : undefined;
+					if (typeof throughSeq !== "number") return false;
+					const page = await api.page({
+						address: { kind: "session", sessionId: id },
+						throughSeq,
+						maxMessages: 8
+					});
+					if (!accepted(page)) return false;
+					const records = payload(page).records;
+					if (!Array.isArray(records)) return false;
+					const events = records.map((record) => record && record.event).filter(Boolean);
+					for (let index = events.length - 1; index >= 0; index -= 1) {
+						if (events[index].type !== "turn/end") continue;
+						const reason = events[index].data ? events[index].data.reason : undefined;
+						return reason !== null && typeof reason === "object" && reason.kind === "blocked";
+					}
+					return false;
+				} catch (error) {
+					return false;
+				}
+			};
+			const send = async (id, text) => {
+				// The UI calls prompt(content, "queue"): same shape here, so the host
+				// sees exactly what the composer would have sent.
+				const result = await sessionApi().prompt({
+					requestId: (globalThis.crypto && globalThis.crypto.randomUUID)
+						? globalThis.crypto.randomUUID()
+						: "ball-" + Date.now(),
+					sessionId: id,
+					mode: "queue",
+					content: [{ type: "text", text }]
+				});
+				if (!accepted(result)) {
+					const error = (result && result.error) || {};
+					lastError = (error.code ? error.code + ": " : "") + (error.message ?? "no detail");
+				}
+				return accepted(result);
+			};
+
+			const drain = async () => {
+				if (busy) return;
+				busy = true;
+				try {
+					const answer = await call("/ball/inbox");
+					const items = (answer && answer.items) || [];
+					if (items.length === 0) return;
+					if (sessionId === "") sessionId = await open();
+					if (sessionId === "") return;      // no remote yet: leave them queued
+					for (const item of items) {
+						let sent = await send(sessionId, item.text);
+						if (!sent) {
+							// Deleted from the UI, most likely: make a fresh session.
+							forget();
+							sessionId = await open();
+							if (sessionId === "") return;
+							sent = await send(sessionId, item.text);
+						}
+						if (!sent) {
+							// The code and message come from the host: this is what the
+							// first three attempts could not tell us.
+							report("悬浮球会话被拒 " + (lastError || "（无细节）"));
+							return;                    // try again on the next tick
+						}
+						// An accepted prompt is not a running turn: a session the user
+						// deleted still takes the words and then refuses the step. Give
+						// the turn a moment to land, then look — and if this thread is
+						// finished, move the same words to a fresh one instead of
+						// leaving them in a thread nobody reads.
+						await pause(700);
+						if (await threadBlocked(sessionId)) {
+							report("悬浮球会话已失效，换一条新的");
+							forget();
+							const restarted = await open();
+							if (restarted === "") return;
+							if (await send(restarted, item.text)) sessionId = restarted;
+							else {
+								report("悬浮球会话：新会话没接住这句话");
+								return;                // the app keeps the item queued
+							}
+						}
+						await call("/ball/inbox/ack", { ids: [item.id] });
+					}
+				} catch (error) {
+					// The app keeps the queue; the bubble says why nothing moved.
+					report("悬浮球会话：" + describe(error));
+				} finally {
+					busy = false;
+				}
+			};
+
+			const interval = setInterval(drain, 1200);
+			drain();
+			return { disconnect: () => clearInterval(interval) };
+		}
+
+		/* ==== @ball-inbox:end ==== */
 
 		/**
 		 * Where the floating ball's words end up.
@@ -1191,55 +1812,134 @@ window.__ModuleLoader__.load({
 		/**
 		 * Tell the floating ball what the session is doing.
 		 *
-		 * The page is the only place that knows which tool is running, and the
-		 * ball is the only thing the user sees while they are in another app, so
-		 * the two are wired together here: new rows in the conversation are
-		 * reported to `/ball/say`, throttled and de-duplicated so the bubble reads
-		 * like a status line rather than a log.
+		 * The page is the only place that knows which tool is running, and the ball is
+		 * the only surface the user sees while they are in another app, so the two are
+		 * wired together here. This revision makes the bubble *move*: a call that takes
+		 * ten seconds used to be one static line, which looks exactly like a wedged one.
+		 * A spinner frame now advances while the work is in flight, and the line settles
+		 * without it when the work ends.
 		 *
-		 * Deliberately class-name agnostic: the shell's CSS modules are hashed, so
-		 * this watches for *text* appearing and filters the small set of things
-		 * that are not progress (the composer, our own panels, buttons).
+		 * It also knows when to shut up: frames go out only while the harness tab is
+		 * visible, and only once the bridge has answered that a ball is really on screen
+		 * (`/ball/say` answers shown). A backgrounded page or a switched-off ball costs
+		 * nothing.
+		 *
+		 * The source is still rows appearing in the conversation. Reading the harness's
+		 * own session state would mean injecting its `sessions` service, and a plugin
+		 * that fails to inject takes the whole settings page down with it (FINDINGS §4).
+		 * Watching text is also class-name agnostic — the shell's CSS modules are hashed —
+		 * and the filter drops the handful of rows that are not progress (the composer,
+		 * our own panels, buttons).
 		 */
 		function installBallStatus() {
-			let last = "";
-			let lastAt = 0;
-			let pending = null;
+			// The ball is fed by its own channel now: `ball` in the sandbox →
+			// /ball/state → the native rotation and bubble. This fallback watched the
+			// conversation for new rows instead, and that is why the bubble used to
+			// twitch once per message and why the status was always a fragment —
+			// rows arrive out of order and half the steps never produce one at all.
+			//
+			// Off by default, then. It stays here (and stays tested) for a shell that
+			// has no status channel, or for anyone who wants the old behaviour:
+			//   globalThis.__dshAndroidScrapeStatus = true
+			if (globalThis.__dshAndroidScrapeStatus !== true) {
+				return { disconnect: () => {} };
+			}
+			// Braille (⠋⠙⠹…) reads as a nicer spinner but depends on the device font;
+			// quarter circles are in every Noto build and still read as motion at 12sp.
+			const FRAMES = ["◐", "◓", "◑", "◒"];
+			const FRAME_MS = 280;
+			const IDLE_MS = 2500;
+			const MAX = 34;
 			const IGNORE = /^(发送|收起|停止|新建会话|设置|插件|终端)$/;
-			const send = (text) => {
-				const line = text.trim().replace(/\s+/g, " ");
-				if (line.length < 2 || line.length > 48 || IGNORE.test(line)) return;
-				if (line === last) return;
-				const now = Date.now();
-				if (now - lastAt < 1200) {
-					// Keep only the newest of a burst; a tool row is added together
-					// with its spinner and duration, and only the last one matters.
-					pending = line;
+			let current = "";
+			let lastSent = "";
+			let sentFrame = false;
+			let changedAt = 0;
+			let shown = null;
+			let frame = 0;
+
+			// The native channel wins whenever it is active: `ball` inside the
+			// sandbox (or the app itself) states what is happening in the agent's
+			// own words, and two writers would only make the bubble flicker. Read
+			// with a poll rather than injected — injecting the session service is
+			// how a plugin takes the whole settings page down with it.
+			let native = false;
+			const readNative = async () => {
+				try {
+					const answer = await call("/ball/state");
+					const state = (answer && answer.state) || {};
+					native = state.running === true
+						&& state.phase !== undefined && state.phase !== "idle"
+						&& Number(state.age || 0) < 30000;
+				} catch (error) {
+					native = false;                  // older shell: no endpoint, fallback only
+				}
+				return native;
+			};
+			readNative();
+			const nativeTimer = setInterval(readNative, 2000);
+
+			const compose = (text, withFrame) => {
+				const clean = String(text).trim().replace(/\s+/g, " ");
+				const clipped = clean.length > MAX ? clean.slice(0, MAX) + "…" : clean;
+				return withFrame ? FRAMES[frame % FRAMES.length] + " " + clipped : "✓ " + clipped;
+			};
+
+			const send = async (text) => {
+				if (text === "" || text === lastSent) return;
+				// One fresh read before speaking. The poll above can be two seconds
+				// stale, and in that window a scraped row would land on top of the
+				// status the agent set for itself.
+				if (await readNative()) return;
+				lastSent = text;
+				call("/ball/say", { text })
+					.then((answer) => { shown = answer !== null && answer.shown === true; })
+					.catch(() => { shown = false; });
+			};
+
+			const timer = setInterval(() => {
+				if (typeof document !== "undefined" && document.hidden) return;
+				if (shown === false) return;              // no ball on screen: nothing to say
+				if (native) return;                       // `ball` owns the bubble right now
+				if (current === "") return;               // idle
+				if (Date.now() - changedAt > IDLE_MS) {
+					// Work finished: one last line without the spinner, then quiet. The
+					// bubble's own timer fades it out after that.
+					if (sentFrame) send(compose(current, false));
+					current = "";
 					return;
 				}
-				last = line;
-				lastAt = now;
-				call("/ball/say", { text: line + "…" }).catch(() => {});
-			};
-			setInterval(() => {
-				if (pending === null) return;
-				const line = pending;
-				pending = null;
-				send(line);
-			}, 1200);
+				sentFrame = true;
+				send(compose(current, true));
+				frame += 1;
+			}, FRAME_MS);
 
 			const observer = new MutationObserver((records) => {
+				if (native) return;                       // its lines are the agent's own
 				for (const record of records) {
 					for (const node of record.addedNodes) {
 						if (node.nodeType !== 1) continue;
 						if (node.closest !== undefined && node.closest("form, [role=textbox], [data-dsa]") !== null) continue;
-						const text = (node.innerText ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
-						if (text.length > 0) send(text[text.length - 1]);
+						const rows = (node.innerText ?? "").split("\n").map((row) => row.trim()).filter(Boolean);
+						if (rows.length === 0) continue;
+						const next = rows[rows.length - 1];
+						if (next.length < 2 || next.length > 48 || IGNORE.test(next)) continue;
+						current = next;
+						changedAt = Date.now();
 					}
 				}
 			});
 			observer.observe(document.body, { childList: true, subtree: true });
-			return observer;
+
+			// The caller treats the return value as an observer; keep that contract, and
+			// stop the frame timer with it.
+			return {
+				disconnect: () => {
+					observer.disconnect();
+					clearInterval(timer);
+					clearInterval(nativeTimer);
+				}
+			};
 		}
 
 		function AndroidSection(props) {
@@ -1369,6 +2069,2615 @@ window.__ModuleLoader__.load({
 					h("pre", { className: "dsa-pre" }, (snapshot.log ?? []).join("\n") || t("logEmpty"))));
 		}
 
+		/* ==== @vt-haptic:begin — light tap feedback for the on-screen key row. Tested by test/vt-haptic.test.mjs ==== */
+		/**
+		 * A short tick under the finger when a key-row button is hit.
+		 *
+		 * `navigator.vibrate` is the wrong instrument here twice over: the WebView
+		 * needs the VIBRATE permission, and a vibration is a buzz rather than the
+		 * keyboard's own tap. So the app's loopback bridge is asked first — its
+		 * `/haptic` route runs `HapticFeedbackConstants.KEYBOARD_TAP` on the real
+		 * window, which is the same feedback the soft keyboard gives and honours
+		 * the system's touch-feedback setting. `navigator.vibrate` stays as the
+		 * fallback for a page opened outside the app.
+		 *
+		 * Rapid taps collapse into one tick: without the debounce, holding a key
+		 * down turns "tap" into "buzz".
+		 */
+		function createVtHaptic(options) {
+			const call = options.call === undefined ? null : options.call;
+			const vibrate = options.vibrate === undefined ? null : options.vibrate;
+			const now = options.now === undefined ? () => Date.now() : options.now;
+			const minIntervalMs = options.minIntervalMs === undefined ? 60 : options.minIntervalMs;
+			const durationMs = options.durationMs === undefined ? 12 : options.durationMs;
+			let last = -Infinity;
+
+			function fallback() {
+				if (vibrate === null) return false;
+				try {
+					return vibrate(durationMs) !== false;
+				} catch {
+					return false;
+				}
+			}
+
+			return {
+				/**
+				 * One tap; returns whether anything was attempted. The debounce is the
+				 * only guard (no in-flight flag) so a bridge that never answers can
+				 * never wedge the key row.
+				 */
+				tap() {
+					const time = now();
+					if (time - last < minIntervalMs) return false;
+					last = time;
+					if (call === null) {
+						fallback();
+						return false;
+					}
+					try {
+						const result = call("/haptic", { kind: "tap" });
+						if (result !== null && typeof result.then === "function") result.then(() => {}, () => fallback());
+					} catch {
+						fallback();
+					}
+					return true;
+				},
+				/** Whether the bridge call is believed to work in this page. */
+				hasBridge: () => call !== null
+			};
+		}
+		/* ==== @vt-haptic:end ==== */
+		/* ==== @vt-core:begin — pure terminal emulator (no DOM). Tested by test/vt-core.test.mjs ==== */
+		/**
+		 * A small VT100/xterm-compatible screen: the subset a shell, a Readline
+		 * prompt, a pager and a colorized build log actually emit.
+		 *
+		 * Why it exists: the panel used to load xterm from the guest PTY service.
+		 * xterm brings a hidden textarea of its own that fights the Android IME,
+		 * and its canvas/DOM renderers keep the screen away from the browser's
+		 * text selection, which is the only selection a phone has. This core owns
+		 * the grid and nothing else: no DOM, no input, no timers, so the whole
+		 * parser can be diffed against xterm in plain Node.
+		 *
+		 * Cells carry text plus attributes; rows are cheap objects with a revision
+		 * the painter compares, so repainting costs the rows that changed.
+		 */
+		function createVtCore() {
+			/* ------------------------------------------------------------ cell model */
+			const FLAG_BOLD = 1;
+			const FLAG_DIM = 2;
+			const FLAG_ITALIC = 4;
+			const FLAG_UNDERLINE = 8;
+			const FLAG_BLINK = 16;
+			const FLAG_INVERSE = 32;
+			const FLAG_INVISIBLE = 64;
+			const FLAG_STRIKE = 128;
+
+			let rowSeq = 0;
+
+			/** Zero width: combining marks, joiners, variation selectors, skin tones. */
+			function isZeroWidth(cp) {
+				if (cp === 0x200d || cp === 0x200b || cp === 0x200c || cp === 0xfeff) return true;
+				if (cp >= 0x0300 && cp <= 0x036f) return true;
+				if (cp >= 0x0483 && cp <= 0x0489) return true;
+				if (cp >= 0x0591 && cp <= 0x05c7) return true;
+				if (cp >= 0x0610 && cp <= 0x061a) return true;
+				if (cp >= 0x064b && cp <= 0x065f) return true;
+				if (cp === 0x0670) return true;
+				if (cp >= 0x06d6 && cp <= 0x06dc) return true;
+				if (cp >= 0x06df && cp <= 0x06e4) return true;
+				if (cp >= 0x06e7 && cp <= 0x06e8) return true;
+				if (cp >= 0x06ea && cp <= 0x06ed) return true;
+				if (cp === 0x0711) return true;
+				if (cp >= 0x0730 && cp <= 0x074a) return true;
+				if (cp >= 0x07a6 && cp <= 0x07b0) return true;
+				if (cp >= 0x07eb && cp <= 0x07f3) return true;
+				if (cp >= 0x0816 && cp <= 0x082d) return true;
+				if (cp >= 0x0859 && cp <= 0x085b) return true;
+				if (cp >= 0x08d3 && cp <= 0x0903) return true;
+				if (cp >= 0x093a && cp <= 0x094f) return true;
+				if (cp >= 0x0951 && cp <= 0x0957) return true;
+				if (cp >= 0x0962 && cp <= 0x0963) return true;
+				if (cp === 0x0e31) return true;
+				if (cp >= 0x0e34 && cp <= 0x0e3a) return true;
+				if (cp >= 0x0e47 && cp <= 0x0e4e) return true;
+				if (cp === 0x0eb1) return true;
+				if (cp >= 0x0eb4 && cp <= 0x0ebc) return true;
+				if (cp >= 0x0ec8 && cp <= 0x0ecd) return true;
+				if (cp >= 0x1ab0 && cp <= 0x1aff) return true;
+				if (cp >= 0x1dc0 && cp <= 0x1dff) return true;
+				if (cp >= 0x200e && cp <= 0x200f) return true;
+				if (cp >= 0x2028 && cp <= 0x202e) return true;
+				if (cp >= 0x20d0 && cp <= 0x20f0) return true;
+				if (cp >= 0xfe00 && cp <= 0xfe0f) return true;
+				if (cp >= 0xfe20 && cp <= 0xfe2f) return true;
+				if (cp >= 0x1f3fb && cp <= 0x1f3ff) return true;
+				if (cp >= 0xe0100 && cp <= 0xe01ef) return true;
+				return false;
+			}
+
+			/** Two columns: East Asian Wide/Fullwidth and the emoji blocks. */
+			function isWide(cp) {
+				if (cp < 0x1100) return false;
+				if (cp >= 0x1100 && cp <= 0x115f) return true;
+				if (cp >= 0x2e80 && cp <= 0x303e) return true;
+				if (cp >= 0x3041 && cp <= 0x33ff) return true;
+				if (cp >= 0x3400 && cp <= 0x4dbf) return true;
+				if (cp >= 0x4e00 && cp <= 0x9fff) return true;
+				if (cp >= 0xa000 && cp <= 0xa4cf) return true;
+				if (cp >= 0xa960 && cp <= 0xa97f) return true;
+				if (cp >= 0xac00 && cp <= 0xd7a3) return true;
+				if (cp >= 0xf900 && cp <= 0xfaff) return true;
+				if (cp >= 0xfe10 && cp <= 0xfe19) return true;
+				if (cp >= 0xfe30 && cp <= 0xfe6f) return true;
+				if (cp >= 0xff00 && cp <= 0xff60) return true;
+				if (cp >= 0xffe0 && cp <= 0xffe6) return true;
+				if (cp >= 0x1f300 && cp <= 0x1f64f) return true;
+				if (cp >= 0x1f680 && cp <= 0x1f6ff) return true;
+				if (cp >= 0x1f900 && cp <= 0x1f9ff) return true;
+				if (cp >= 0x1fa70 && cp <= 0x1faff) return true;
+				if (cp >= 0x20000 && cp <= 0x2fffd) return true;
+				if (cp >= 0x30000 && cp <= 0x3fffd) return true;
+				return false;
+			}
+
+			function cpWidth(cp) {
+				if (cp === 0) return 0;
+				if (isZeroWidth(cp)) return 0;
+				return isWide(cp) ? 2 : 1;
+			}
+
+			function blankCell(bg) {
+				return {
+					ch: " ",
+					w: 1,
+					fg: null,
+					bg: bg === undefined ? null : bg,
+					flags: 0
+				};
+			}
+
+			function newRow(cols) {
+				return {
+					id: ++rowSeq,
+					cells: new Array(cols).fill(null),
+					wrapped: false,
+					rev: 0
+				};
+			}
+
+			function touch(row) {
+				row.rev = (row.rev + 1) | 0;
+			}
+
+			/** DEC Special Graphics — the line drawing set `less`, `htop` and TUIs use. */
+			const DEC_GRAPHICS = {
+				0x5f: " ",
+				0x60: "\u25c6",
+				0x61: "\u2592",
+				0x62: "\u2409",
+				0x63: "\u240c",
+				0x64: "\u240d",
+				0x65: "\u240a",
+				0x66: "\u00b0",
+				0x67: "\u00b1",
+				0x68: "\u2424",
+				0x69: "\u240b",
+				0x6a: "\u2518",
+				0x6b: "\u2510",
+				0x6c: "\u250c",
+				0x6d: "\u2514",
+				0x6e: "\u253c",
+				0x6f: "\u23ba",
+				0x70: "\u23bb",
+				0x71: "\u2500",
+				0x72: "\u23bc",
+				0x73: "\u23bd",
+				0x74: "\u251c",
+				0x75: "\u2524",
+				0x76: "\u2534",
+				0x77: "\u252c",
+				0x78: "\u2502",
+				0x79: "\u2264",
+				0x7a: "\u2265",
+				0x7b: "\u03c0",
+				0x7c: "\u2260",
+				0x7d: "\u00a3",
+				0x7e: "\u00b7"
+			};
+
+			/** The xterm 256-color palette: 16 system colors plus the 6x6x6 cube and ramp. */
+			const BASE_256 = (() => {
+				const table = new Array(256);
+				for (let i = 16; i < 232; i++) {
+					const value = i - 16;
+					const r = Math.floor(value / 36);
+					const g = Math.floor(value / 6) % 6;
+					const b = value % 6;
+					const level = (part) => part === 0 ? 0 : 55 + part * 40;
+					table[i] = rgbHex(level(r), level(g), level(b));
+				}
+				for (let i = 232; i < 256; i++) {
+					const level = 8 + (i - 232) * 10;
+					table[i] = rgbHex(level, level, level);
+				}
+				return table;
+			})();
+
+			function rgbHex(r, g, b) {
+				return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+			}
+
+			/** The light and dark ANSI ramps. Both keep every slot legible on their background. */
+			const THEMES = {
+				light: {
+					defaultFg: "#1f2329",
+					defaultBg: "#ffffff",
+					defaultCursor: "#1f6feb",
+					selectionBg: "#bcd6ff",
+					selectionFg: "#10131a",
+					ansi: [
+						"#24292f",
+						"#c02b2b",
+						"#116a2e",
+						"#8a5a00",
+						"#1f6feb",
+						"#8b2fa0",
+						"#0d6b78",
+						"#6e7781",
+						"#57606a",
+						"#d13438",
+						"#1a7f37",
+						"#9a6700",
+						"#0969da",
+						"#a02fa0",
+						"#0f7b8a",
+						"#1f2329"
+					]
+				},
+				dark: {
+					defaultFg: "#e8eaed",
+					defaultBg: "#14161a",
+					defaultCursor: "#4c8dff",
+					selectionBg: "#2c3a55",
+					selectionFg: "#f2f4f8",
+					ansi: [
+						"#14161a",
+						"#e06c75",
+						"#98c379",
+						"#e5c07b",
+						"#61afef",
+						"#c678dd",
+						"#56b6c2",
+						"#d7dae0",
+						"#5f6368",
+						"#ff7b86",
+						"#b5e08d",
+						"#ffd68a",
+						"#82c4ff",
+						"#e094f5",
+						"#79d7e2",
+						"#ffffff"
+					]
+				}
+			};
+
+			const DEFAULT_THEME = "dark";
+
+			class Screen {
+				/**
+				 * @param options - `{cols, rows, scrollback}`; every field is optional.
+				 */
+				constructor(options) {
+					const config = options || {};
+					this.cols = Math.max(2, config.cols || 80);
+					this.rows = Math.max(1, config.rows || 24);
+					this.scrollbackLimit = Math.max(0, config.scrollback === undefined ? 1000 : config.scrollback);
+					this.onResponse = null;
+					this.onTitle = null;
+					this.onBell = null;
+					this.altActive = false;
+					this.title = "";
+					this.palette = Object.assign({}, THEMES[DEFAULT_THEME]);
+					this.dynamic = {
+						indexed: new Map(),
+						foreground: null,
+						background: null,
+						cursor: null
+					};
+					this.reset();
+				}
+
+				/** Full reset: RIS, a reconnect, or a fresh mount. */
+				reset() {
+					this.lines = [newRow(this.cols)];
+					for (let i = 1; i < this.rows; i++) this.lines.push(newRow(this.cols));
+					this.savedLines = null;
+					this.savedCursor = null;
+					this.cursor = {
+						x: 0,
+						y: 0
+					};
+					this.cursorVisible = true;
+					this.cursorStyle = "block";
+					this.pendingWrap = false;
+					this.scrollTop = 0;
+					this.scrollBottom = this.rows - 1;
+					this.savedScroll = null;
+					this.tabs = [];
+					this._buildTabs();
+					this.charsets = ["ascii", "ascii"];
+					this.activeCharset = 0;
+					this.singleShift = null;
+					this.pen = {
+						fg: null,
+						bg: null,
+						flags: 0
+					};
+					this.modes = {
+						autowrap: true,
+						origin: false,
+						insert: false,
+						newline: false,
+						applicationCursor: false,
+						applicationKeypad: false,
+						bracketedPaste: false,
+						mouse: "none",
+						mouseSgr: false,
+						reverseVideo: false
+					};
+					this.dynamic.indexed.clear();
+					this.dynamic.foreground = null;
+					this.dynamic.background = null;
+					this.dynamic.cursor = null;
+					this._lastCell = null;
+					this._joinNext = false;
+					this._repeat = null;
+					this._utf8 = {
+						bytes: [],
+						needed: 0,
+						code: 0
+					};
+					this._state = 0;
+					this._params = [];
+					this._paramText = "";
+					this._private = "";
+					this._intermediate = "";
+					this._string = "";
+					this._oscCode = null;
+				}
+
+				/* ------------------------------------------------------------ reading */
+				get screenTop() {
+					return this.lines.length - this.rows;
+				}
+
+				get lineCount() {
+					return this.lines.length;
+				}
+
+				rowAt(index) {
+					return this.lines[index];
+				}
+
+				cellAt(rowIndex, x) {
+					const row = this.lines[rowIndex];
+					if (row === undefined) return null;
+					return row.cells[x] || null;
+				}
+
+				/** Absolute row index of the cursor inside {@link lines}. */
+				get cursorAbs() {
+					return this.screenTop + this.cursor.y;
+				}
+
+				/* ------------------------------------------------------------- colors */
+				/** Resolve a cell color value (null, 0-255, or "#rrggbb") to CSS. */
+				colorOf(value, fallback) {
+					if (value === null || value === undefined) return fallback;
+					if (typeof value === "string") return value;
+					if (value < 16) {
+						const override = this.dynamic.indexed.get(value);
+						return override || this.palette.ansi[value];
+					}
+					const override = this.dynamic.indexed.get(value);
+					return override || BASE_256[value] || fallback;
+				}
+
+				get defaultFg() {
+					return this.dynamic.foreground || this.palette.defaultFg;
+				}
+
+				get defaultBg() {
+					return this.dynamic.background || this.palette.defaultBg;
+				}
+
+				get cursorColor() {
+					return this.dynamic.cursor || this.palette.defaultCursor;
+				}
+
+				/** Swap the light/dark ramp without touching the screen contents. */
+				setTheme(name) {
+					const theme = THEMES[name] || THEMES[DEFAULT_THEME];
+					this.palette = Object.assign({}, theme);
+				}
+
+				/* ------------------------------------------------------------ writing */
+				/**
+				 * Feed PTY bytes. Accepts a Uint8Array (the socket path) or a string
+				 * (tests and OSC payloads), and keeps UTF-8 state across calls so a
+				 * multi-byte character split by the socket still decodes.
+				 */
+				write(input) {
+					if (typeof input === "string") return this._bytes(new TextEncoder().encode(input));
+					return this._bytes(input);
+				}
+
+				_bytes(bytes) {
+					for (let i = 0; i < bytes.length; i++) {
+						const byte = bytes[i];
+						const utf8 = this._utf8;
+						if (utf8.needed === 0) {
+							if (byte < 0x80) this._feed(byte);
+							else if ((byte & 0xe0) === 0xc0) {
+								utf8.needed = 1;
+								utf8.code = byte & 0x1f;
+							} else if ((byte & 0xf0) === 0xe0) {
+								utf8.needed = 2;
+								utf8.code = byte & 0x0f;
+							} else if ((byte & 0xf8) === 0xf0) {
+								utf8.needed = 3;
+								utf8.code = byte & 0x07;
+							} else this._feed(0xfffd);
+							continue;
+						}
+						if ((byte & 0xc0) !== 0x80) {
+							utf8.needed = 0;
+							this._feed(0xfffd);
+							i--;
+							continue;
+						}
+						utf8.code = (utf8.code << 6) | (byte & 0x3f);
+						if (--utf8.needed === 0) this._feed(utf8.code);
+					}
+				}
+
+				_feed(cp) {
+					switch (this._state) {
+						case 0:
+							if (cp < 0x20) return this._control(cp);
+							if (cp === 0x7f) return;
+							return this._print(cp);
+						case 1:
+							return this._escape(cp);
+						case 2:
+							return this._csi(cp);
+						case 3:
+							return this._stringState(cp, 0);
+						case 4:
+							return this._stringState(cp, 1);
+						case 5:
+							return this._escapeIntermediate(cp);
+						case 6:
+							return this._stringStepped(cp);
+						default:
+							return;
+					}
+				}
+
+				_response(text) {
+					if (typeof this.onResponse === "function") this.onResponse(text);
+				}
+
+				_control(cp) {
+					switch (cp) {
+						case 0x1b:
+							this._state = 1;
+							return;
+						case 0x07:
+							if (typeof this.onBell === "function") this.onBell();
+							return;
+						case 0x08:
+							if (this.cursor.x > 0) this.cursor.x--;
+							else if (this.pendingWrap) this.pendingWrap = false;
+							return;
+						case 0x09:
+							this._tab();
+							return;
+						case 0x0a:
+						case 0x0b:
+						case 0x0c:
+							this._linefeed();
+							if (this.modes.newline) this.cursor.x = 0;
+							return;
+						case 0x0d:
+							this.cursor.x = 0;
+							this.pendingWrap = false;
+							return;
+						case 0x0e:
+							this.activeCharset = 1;
+							return;
+						case 0x0f:
+							this.activeCharset = 0;
+							return;
+						default:
+							return;
+					}
+				}
+
+				_escape(cp) {
+					this._state = 0;
+					switch (cp) {
+						case 0x5b:
+							this._params = [];
+							this._paramText = "";
+							this._private = "";
+							this._intermediate = "";
+							this._state = 2;
+							return;
+						case 0x5d:
+							this._string = "";
+							this._oscCode = null;
+							this._state = 3;
+							return;
+						case 0x50:
+						case 0x58:
+						case 0x5e:
+						case 0x5f:
+							this._string = "";
+							this._state = 4;
+							return;
+						case 0x28:
+						case 0x29:
+						case 0x2a:
+						case 0x2b:
+							this._escIntermediate = cp;
+							this._state = 5;
+							return;
+						case 0x23:
+						case 0x20:
+						case 0x25:
+						case 0x22:
+							this._escIntermediate = cp;
+							this._state = 5;
+							return;
+						case 0x37:
+							this._saveCursor();
+							return;
+						case 0x38:
+							this._restoreCursor();
+							return;
+						case 0x44:
+							this._index();
+							return;
+						case 0x45:
+							this.cursor.x = 0;
+							this._index();
+							return;
+						case 0x48:
+							this._setTabStop();
+							return;
+						case 0x4d:
+							this._reverseIndex();
+							return;
+						case 0x63:
+							this.reset();
+							return;
+						case 0x3d:
+							this.modes.applicationKeypad = true;
+							return;
+						case 0x3e:
+							this.modes.applicationKeypad = false;
+							return;
+						case 0x5a:
+							this._response("\u001b[?1;2c");
+							return;
+						case 0x5c:
+							return;
+						default:
+							return;
+					}
+				}
+
+				_escapeIntermediate(cp) {
+					this._state = 0;
+					const lead = this._escIntermediate;
+					this._escIntermediate = 0;
+					if (lead === 0x28 || lead === 0x29) {
+						const slot = lead === 0x28 ? 0 : 1;
+						this.charsets[slot] = cp === 0x30 ? "graphics" : cp === 0x41 || cp === 0x42 ? "ascii" : "ascii";
+						return;
+					}
+					if (lead === 0x2a || lead === 0x2b) return;
+					if (lead === 0x23 && cp === 0x38) return this._alignmentTest();
+					/* ESC SP F/G/H (7/8 bit controls), ESC % G (UTF-8): accepted, no state. */
+				}
+
+				_stringState(cp, kind) {
+					if (cp === 0x07 || cp === 0x9c) {
+						const text = this._string;
+						this._state = 0;
+						this._string = "";
+						if (kind === 0) this._osc(text);
+						return;
+					}
+					if (cp === 0x1b) {
+						this._state = 6;
+						return;
+					}
+					if (kind === 0 && this._string.length < 4096) this._string += String.fromCodePoint(cp);
+				}
+
+				/** ESC inside a string waits for `\` (ST) or cancels back to ground. */
+				_stringStepped(cp) {
+					this._state = 0;
+					if (cp === 0x5c) {
+						const text = this._string;
+						this._string = "";
+						this._osc(text);
+					} else this._string = "";
+				}
+
+				_csi(cp) {
+					if (cp >= 0x30 && cp <= 0x39) {
+						this._paramText += String.fromCharCode(cp);
+						return;
+					}
+					if (cp === 0x3b || cp === 0x3a) {
+						this._params.push(this._paramText === "" ? null : Number(this._paramText));
+						this._paramText = "";
+						return;
+					}
+					if (cp >= 0x3c && cp <= 0x3f) {
+						this._private += String.fromCharCode(cp);
+						return;
+					}
+					if (cp >= 0x20 && cp <= 0x2f) {
+						this._intermediate += String.fromCharCode(cp);
+						return;
+					}
+					if (cp >= 0x40 && cp <= 0x7e) {
+						this._params.push(this._paramText === "" ? null : Number(this._paramText));
+						this._paramText = "";
+						const params = this._params;
+						const priv = this._private;
+						this._params = [];
+						this._private = "";
+						this._intermediate = "";
+						this._state = 0;
+						return this._dispatchCsi(cp, params, priv);
+					}
+					this._state = 0;
+				}
+
+				_param(params, index, fallback) {
+					const value = params[index];
+					if (value === null || value === undefined || Number.isNaN(value)) return fallback;
+					return value;
+				}
+
+				_dispatchCsi(final, params, priv) {
+					const first = this._param(params, 0, 0);
+					const count = Math.max(1, first === 0 ? 1 : first);
+					switch (final) {
+						case 0x40:
+							return this._insertChars(count);
+						case 0x41:
+							return this._cursorUp(count);
+						case 0x42:
+							return this._cursorDown(count);
+						case 0x43:
+							return this._cursorForward(count);
+						case 0x44:
+							return this._cursorBack(count);
+						case 0x45:
+							return this._cursorNextLine(count);
+						case 0x46:
+							return this._cursorPrevLine(count);
+						case 0x45:
+							return this._cursorNextLine(count);
+						case 0x46:
+							return this._cursorPrevLine(count);
+						case 0x47:
+							return this._setColumn(first === 0 ? 1 : first);
+						case 0x48:
+						case 0x66:
+							return this._setPosition(first === 0 ? 1 : first, this._param(params, 1, 1));
+						case 0x49:
+							return this._forwardTabs(count);
+						case 0x4a:
+							return this._eraseInDisplay(first);
+						case 0x4b:
+							return this._eraseInLine(first);
+						case 0x4c:
+							return this._insertLines(count);
+						case 0x4d:
+							return this._deleteLines(count);
+						case 0x50:
+							return this._deleteChars(count);
+						case 0x53:
+							return this._scrollUp(count);
+						case 0x54:
+							return this._scrollDown(count);
+						case 0x58:
+							return this._eraseChars(count);
+						case 0x5a:
+							return this._backTabs(count);
+						case 0x60:
+							return this._setColumn(first === 0 ? 1 : first);
+						case 0x61:
+							return this._cursorForward(count);
+						case 0x62:
+							return this._repeatChar(count);
+						case 0x63:
+							return this._response(priv === ">" ? "\u001b[>0;276;0c" : "\u001b[?1;2c");
+						case 0x64:
+							return this._setRow(first === 0 ? 1 : first);
+						case 0x65:
+							return this._cursorDown(count);
+						case 0x67:
+							return this._clearTabs(first);
+						case 0x68:
+							return this._setModes(params, true, priv);
+						case 0x6c:
+							return this._setModes(params, false, priv);
+						case 0x6d:
+							return this._sgr(params);
+						case 0x6e:
+							return this._report(first, priv);
+						case 0x71:
+							return this._setCursorStyle(first);
+						case 0x72:
+							return this._setScrollRegion(params);
+						case 0x73:
+							return this._saveCursor();
+						case 0x74:
+							return this._windowOp(params);
+						case 0x75:
+							return this._restoreCursor();
+						default:
+							return;
+					}
+				}
+
+				/* ------------------------------------------------------------ movement */
+				_verticalTop() {
+					return this.modes.origin ? this.scrollTop : 0;
+				}
+
+				_verticalBottom() {
+					return this.modes.origin ? this.scrollBottom : this.rows - 1;
+				}
+
+				_cursorUp(count) {
+					this.cursor.y = Math.max(this._verticalTop(), this.cursor.y - count);
+					this.pendingWrap = false;
+				}
+
+				_cursorDown(count) {
+					this.cursor.y = Math.min(this._verticalBottom(), this.cursor.y + count);
+					this.pendingWrap = false;
+				}
+
+				_cursorForward(count) {
+					this.cursor.x = Math.min(this.cols - 1, this.cursor.x + count);
+					this.pendingWrap = false;
+				}
+
+				_cursorBack(count) {
+					this.cursor.x = Math.max(0, this.cursor.x - count);
+					this.pendingWrap = false;
+				}
+
+				_cursorNextLine(count) {
+					this._cursorDown(count);
+					this.cursor.x = 0;
+				}
+
+				_cursorPrevLine(count) {
+					this._cursorUp(count);
+					this.cursor.x = 0;
+				}
+
+				_setColumn(column) {
+					this.cursor.x = Math.min(this.cols - 1, Math.max(0, column - 1));
+					this.pendingWrap = false;
+				}
+
+				_setRow(row) {
+					const value = this._verticalTop() + Math.max(0, row - 1);
+					this.cursor.y = Math.min(this._verticalBottom(), Math.max(this._verticalTop(), value));
+					this.pendingWrap = false;
+				}
+
+				_setPosition(row, column) {
+					this._setRow(row);
+					this._setColumn(column);
+				}
+
+				_tab() {
+					let x = this.cursor.x + 1;
+					while (x < this.cols && !this.tabs[x]) x++;
+					this.cursor.x = Math.min(this.cols - 1, x);
+					this.pendingWrap = false;
+				}
+
+				_forwardTabs(count) {
+					for (let i = 0; i < count; i++) this._tab();
+				}
+
+				_backTabs(count) {
+					for (let i = 0; i < count; i++) {
+						let x = this.cursor.x - 1;
+						while (x > 0 && !this.tabs[x]) x--;
+						this.cursor.x = Math.max(0, x);
+					}
+					this.pendingWrap = false;
+				}
+
+				_buildTabs() {
+					this.tabs = new Array(this.cols).fill(false);
+					for (let x = 8; x < this.cols; x += 8) this.tabs[x] = true;
+				}
+
+				_setTabStop() {
+					if (this.cursor.x < this.tabs.length) this.tabs[this.cursor.x] = true;
+				}
+
+				_clearTabs(mode) {
+					if (mode === 0) this.tabs[this.cursor.x] = false;
+					else if (mode === 3) this.tabs.fill(false);
+				}
+
+				/* ------------------------------------------------------------- scrolling */
+				_linefeed() {
+					this.pendingWrap = false;
+					if (this.cursor.y === this.scrollBottom) this._scrollUp(1);
+					else if (this.cursor.y < this.rows - 1) this.cursor.y++;
+				}
+
+				_index() {
+					if (this.cursor.y === this.scrollBottom) this._scrollUp(1);
+					else if (this.cursor.y < this.rows - 1) this.cursor.y++;
+				}
+
+				_reverseIndex() {
+					if (this.cursor.y === this.scrollTop) this._scrollDown(1);
+					else if (this.cursor.y > 0) this.cursor.y--;
+				}
+
+				_scrollUp(count) {
+					for (let i = 0; i < count; i++) {
+						if (this.scrollTop === 0 && this.scrollBottom === this.rows - 1 && !this.altActive) {
+							this.lines.push(newRow(this.cols));
+							const limit = this.rows + this.scrollbackLimit;
+							while (this.lines.length > limit) this.lines.shift();
+						} else {
+							const topAbs = this.screenTop + this.scrollTop;
+							const bottomAbs = this.screenTop + this.scrollBottom;
+							this.lines.splice(topAbs, 1);
+							this.lines.splice(bottomAbs, 0, newRow(this.cols));
+						}
+					}
+				}
+
+				_scrollDown(count) {
+					for (let i = 0; i < count; i++) {
+						const topAbs = this.screenTop + this.scrollTop;
+						const bottomAbs = this.screenTop + this.scrollBottom;
+						this.lines.splice(bottomAbs, 1);
+						this.lines.splice(topAbs, 0, newRow(this.cols));
+					}
+				}
+
+				_insertLines(count) {
+					if (this.cursor.y < this.scrollTop || this.cursor.y > this.scrollBottom) return;
+					const bottomAbs = this.screenTop + this.scrollBottom;
+					for (let i = 0; i < count; i++) {
+						const abs = this.screenTop + this.cursor.y;
+						if (abs > bottomAbs) break;
+						this.lines.splice(abs, 0, newRow(this.cols));
+						this.lines.splice(bottomAbs + 1, 1);
+					}
+				}
+
+				_deleteLines(count) {
+					if (this.cursor.y < this.scrollTop || this.cursor.y > this.scrollBottom) return;
+					const bottomAbs = this.screenTop + this.scrollBottom;
+					for (let i = 0; i < count; i++) {
+						const abs = this.screenTop + this.cursor.y;
+						if (abs > bottomAbs) break;
+						this.lines.splice(abs, 1);
+						this.lines.splice(this.screenTop + this.scrollBottom, 0, newRow(this.cols));
+					}
+				}
+
+				/* ---------------------------------------------------------------- erasing */
+				_eraseInLine(mode) {
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row === undefined) return;
+					let from = 0;
+					let to = this.cols - 1;
+					if (mode === 0) from = this.cursor.x;
+					else if (mode === 1) to = this.cursor.x;
+					this._blank(row, from, to);
+				}
+
+				_eraseInDisplay(mode) {
+					const topAbs = this.screenTop;
+					if (mode === 3) {
+						this.clearAll();
+						return;
+					}
+					if (mode === 0) {
+						this._eraseInLine(0);
+						for (let y = this.cursor.y + 1; y < this.rows; y++) this._blank(this.lines[topAbs + y], 0, this.cols - 1);
+					} else if (mode === 1) {
+						this._eraseInLine(1);
+						for (let y = 0; y < this.cursor.y; y++) this._blank(this.lines[topAbs + y], 0, this.cols - 1);
+					} else if (mode === 2) {
+						for (let y = 0; y < this.rows; y++) this._blank(this.lines[topAbs + y], 0, this.cols - 1);
+					}
+				}
+
+				_eraseChars(count) {
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row === undefined) return;
+					this._blank(row, this.cursor.x, Math.min(this.cols - 1, this.cursor.x + count - 1));
+				}
+
+				_insertChars(count) {
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row === undefined) return;
+					const fill = [];
+					for (let i = 0; i < count; i++) fill.push(blankCell(this.pen.bg));
+					row.cells.splice(this.cursor.x, 0, ...fill);
+					row.cells.length = this.cols;
+					touch(row);
+				}
+
+				_deleteChars(count) {
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row === undefined) return;
+					row.cells.splice(this.cursor.x, count);
+					const bg = this.pen.bg;
+					for (let i = 0; i < count; i++) row.cells.push(blankCell(bg));
+					row.cells.length = this.cols;
+					touch(row);
+				}
+
+				_blank(row, from, to) {
+					if (row === undefined) return;
+					const bg = this.pen.bg;
+					for (let x = Math.max(0, from); x <= Math.min(this.cols - 1, to); x++) row.cells[x] = bg === null ? null : {
+						ch: " ",
+						w: 1,
+						fg: null,
+						bg,
+						flags: 0
+					};
+					touch(row);
+				}
+
+				_alignmentTest() {
+					const topAbs = this.screenTop;
+					for (let y = 0; y < this.rows; y++) {
+						const row = this.lines[topAbs + y];
+						if (row === undefined) continue;
+						for (let x = 0; x < this.cols; x++) row.cells[x] = {
+							ch: "E",
+							w: 1,
+							fg: null,
+							bg: null,
+							flags: 0
+						};
+						touch(row);
+					}
+					this.cursor.x = 0;
+					this.cursor.y = 0;
+				}
+
+				/* ------------------------------------------------------------- scrolling region */
+				_setScrollRegion(params) {
+					const top = this._param(params, 0, 1);
+					const bottom = this._param(params, 1, this.rows);
+					if (top < 1 || bottom > this.rows || top >= bottom) return;
+					this.scrollTop = top - 1;
+					this.scrollBottom = bottom - 1;
+					this.cursor.x = 0;
+					this.cursor.y = this.modes.origin ? this.scrollTop : 0;
+					this.pendingWrap = false;
+				}
+
+				/* -------------------------------------------------------------- printing */
+				_appendToPrev(cp) {
+					const last = this._lastCell;
+					if (last === null) {
+						this._printChar(cp, cpWidth(cp) || 1);
+						return;
+					}
+					const row = this.lines[last.row];
+					const cell = row === undefined ? null : row.cells[last.x];
+					if (cell === null || cell === undefined) {
+						this._printChar(cp, cpWidth(cp) || 1);
+						return;
+					}
+					cell.ch += String.fromCodePoint(cp);
+					touch(row);
+				}
+
+				_mapped(cp) {
+					const slot = this.singleShift === null ? this.activeCharset : this.singleShift;
+					this.singleShift = null;
+					if (this.charsets[slot] !== "graphics") return cp;
+					const glyph = DEC_GRAPHICS[cp];
+					return glyph === undefined ? cp : glyph.codePointAt(0);
+				}
+
+				_print(cp) {
+					const shifter = cp >= 0x20 && cp <= 0x7e;
+					const mapped = shifter ? this._mapped(cp) : cp;
+					const width = cpWidth(mapped);
+					if (this._joinNext) {
+						this._joinNext = false;
+						this._appendToPrev(mapped);
+						return;
+					}
+					if (width === 0) {
+						if (mapped === 0x200d) this._joinNext = true;
+						this._appendToPrev(mapped);
+						return;
+					}
+					this._printChar(mapped, width);
+				}
+
+				/**
+				 * Wrap to the next line, marking the row we leave behind as
+				 * continued so the painter can copy it as one logical line.
+				 */
+				_wrap() {
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row !== undefined) row.wrapped = true;
+					this.cursor.x = 0;
+					this._linefeed();
+					this._lastCell = null;
+				}
+
+				_printChar(cp, width) {
+					const text = typeof cp === "number" ? String.fromCodePoint(cp) : cp;
+					if (this.pendingWrap) {
+						this.pendingWrap = false;
+						this._wrap();
+					}
+					if (width > 1 && this.cursor.x + width > this.cols) {
+						if (this.modes.autowrap) this._wrap();
+						else this.cursor.x = Math.max(0, this.cols - width);
+					}
+					this._repeat = {
+						cp,
+						width
+					};
+					const row = this.lines[this.screenTop + this.cursor.y];
+					if (row === undefined) return;
+					const pen = this.pen;
+					if (this.modes.insert) {
+						const fill = [];
+						for (let i = 0; i < width; i++) fill.push(blankCell(pen.bg));
+						row.cells.splice(this.cursor.x, 0, ...fill);
+						row.cells.length = this.cols;
+					}
+					row.cells[this.cursor.x] = {
+						ch: text,
+						w: width,
+						fg: pen.fg,
+						bg: pen.bg,
+						flags: pen.flags
+					};
+					if (width === 2 && this.cursor.x + 1 < this.cols) row.cells[this.cursor.x + 1] = {
+						ch: "",
+						w: 0,
+						fg: pen.fg,
+						bg: pen.bg,
+						flags: pen.flags
+					};
+					touch(row);
+					this._lastCell = {
+						row: this.screenTop + this.cursor.y,
+						x: this.cursor.x
+					};
+					const next = this.cursor.x + width;
+					if (next >= this.cols) {
+						this.cursor.x = this.cols - 1;
+						this.pendingWrap = this.modes.autowrap;
+					} else this.cursor.x = next;
+				}
+
+				_repeatChar(count) {
+					if (this._repeat === null) return;
+					for (let i = 0; i < count; i++) this._printChar(this._repeat.cp, this._repeat.width);
+				}
+
+				/* ------------------------------------------------------------- SGR */
+				_sgr(params) {
+					const pen = this.pen;
+					for (let i = 0; i < params.length; i++) {
+						const code = params[i] === null ? 0 : params[i];
+						if (code === 0) {
+							pen.fg = null;
+							pen.bg = null;
+							pen.flags = 0;
+						} else if (code === 1) pen.flags |= FLAG_BOLD;
+						else if (code === 2) pen.flags |= FLAG_DIM;
+						else if (code === 3) pen.flags |= FLAG_ITALIC;
+						else if (code === 4) pen.flags |= FLAG_UNDERLINE;
+						else if (code === 5 || code === 6) pen.flags |= FLAG_BLINK;
+						else if (code === 7) pen.flags |= FLAG_INVERSE;
+						else if (code === 8) pen.flags |= FLAG_INVISIBLE;
+						else if (code === 9) pen.flags |= FLAG_STRIKE;
+						else if (code === 21 || code === 22) pen.flags &= ~(FLAG_BOLD | FLAG_DIM);
+						else if (code === 23) pen.flags &= ~FLAG_ITALIC;
+						else if (code === 24) pen.flags &= ~FLAG_UNDERLINE;
+						else if (code === 25) pen.flags &= ~FLAG_BLINK;
+						else if (code === 27) pen.flags &= ~FLAG_INVERSE;
+						else if (code === 28) pen.flags &= ~FLAG_INVISIBLE;
+						else if (code === 29) pen.flags &= ~FLAG_STRIKE;
+						else if (code >= 30 && code <= 37) pen.fg = code - 30;
+						else if (code === 38 || code === 48) {
+							const target = code === 38 ? "fg" : "bg";
+							const mode = params[i + 1];
+							if (mode === 5) {
+								pen[target] = params[i + 2] === null ? 0 : params[i + 2];
+								i += 2;
+							} else if (mode === 2) {
+								let base = i + 2;
+								if (params[base] === null) base++;
+								const r = params[base] === null ? 0 : params[base];
+								const g = params[base + 1] === null ? 0 : params[base + 1];
+								const b = params[base + 2] === null ? 0 : params[base + 2];
+								pen[target] = rgbHex(Math.max(0, Math.min(255, r)), Math.max(0, Math.min(255, g)), Math.max(0, Math.min(255, b)));
+								i = base + 2;
+							} else i += 1;
+						} else if (code === 39) pen.fg = null;
+						else if (code >= 40 && code <= 47) pen.bg = code - 40;
+						else if (code === 49) pen.bg = null;
+						else if (code >= 90 && code <= 97) pen.fg = code - 90 + 8;
+						else if (code >= 100 && code <= 107) pen.bg = code - 100 + 8;
+					}
+				}
+
+				/* ------------------------------------------------------------- modes */
+				_setModes(params, enabled, priv) {
+					for (const raw of params) {
+						const code = raw === null ? 0 : raw;
+						if (priv === "?") {
+							switch (code) {
+								case 1:
+									this.modes.applicationCursor = enabled;
+									break;
+								case 6:
+									this.modes.origin = enabled;
+									this.cursor.x = 0;
+									this.cursor.y = enabled ? this.scrollTop : 0;
+									this.pendingWrap = false;
+									break;
+								case 7:
+									this.modes.autowrap = enabled;
+									break;
+								case 12:
+									break;
+								case 25:
+									this.cursorVisible = enabled;
+									break;
+								case 1000:
+								case 1002:
+								case 1003:
+									this.modes.mouse = enabled ? (code === 1000 ? "click" : code === 1002 ? "drag" : "move") : "none";
+									break;
+								case 1005:
+									this.modes.mouseSgr = false;
+									break;
+								case 1006:
+									this.modes.mouseSgr = enabled;
+									break;
+								case 1049:
+									this._switchScreen(enabled, true);
+									break;
+								case 1047:
+									this._switchScreen(enabled, false);
+									break;
+								case 47:
+									this._switchScreen(enabled, false);
+									break;
+								case 2004:
+									this.modes.bracketedPaste = enabled;
+									break;
+								default:
+									break;
+							}
+							continue;
+						}
+						if (code === 4) this.modes.insert = enabled;
+						else if (code === 20) this.modes.newline = enabled;
+						else if (code === 3) {
+							/* DECCOLM: honoring 132 columns would resize the panel; recorded only. */
+						}
+					}
+				}
+
+				/** Enter or leave the alternate screen buffer (`less`, `vim`, `top`). */
+				_switchScreen(enabled, saveCursor) {
+					if (enabled && !this.altActive) {
+						if (saveCursor) this._saveCursor();
+						this.savedLines = this.lines;
+						this.savedScroll = {
+							top: this.scrollTop,
+							bottom: this.scrollBottom
+						};
+						this.altActive = true;
+						this.lines = [];
+						for (let i = 0; i < this.rows; i++) this.lines.push(newRow(this.cols));
+						this.scrollTop = 0;
+						this.scrollBottom = this.rows - 1;
+						this._lastCell = null;
+						this.cursor.x = 0;
+						this.cursor.y = 0;
+						this.pendingWrap = false;
+					} else if (!enabled && this.altActive) {
+						this.lines = this.savedLines || [newRow(this.cols)];
+						this.altActive = false;
+						if (this.savedScroll !== null) {
+							this.scrollTop = this.savedScroll.top;
+							this.scrollBottom = this.savedScroll.bottom;
+							this.savedScroll = null;
+						}
+						this._lastCell = null;
+						if (saveCursor) this._restoreCursor();
+					}
+				}
+
+				_saveCursor() {
+					this.savedCursor = {
+						x: this.cursor.x,
+						y: this.cursor.y,
+						pen: Object.assign({}, this.pen),
+						charset: this.activeCharset,
+						origin: this.modes.origin,
+						autowrap: this.modes.autowrap
+					};
+				}
+
+				_restoreCursor() {
+					if (this.savedCursor === null) return;
+					this.cursor.x = Math.min(this.cols - 1, Math.max(0, this.savedCursor.x));
+					this.cursor.y = Math.min(this.rows - 1, Math.max(0, this.savedCursor.y));
+					this.pen = Object.assign({}, this.savedCursor.pen);
+					this.activeCharset = this.savedCursor.charset;
+					this.modes.origin = this.savedCursor.origin;
+					this.modes.autowrap = this.savedCursor.autowrap;
+					this.pendingWrap = false;
+				}
+
+				_setCursorStyle(param) {
+					if (param === 0 || param === 1 || param === 2) this.cursorStyle = param === 1 ? "block" : param === 2 ? "block-hollow" : "block";
+					else if (param === 3 || param === 4) this.cursorStyle = param === 3 ? "underline" : "underline-steady";
+					else if (param === 5 || param === 6) this.cursorStyle = param === 5 ? "bar" : "bar-steady";
+				}
+
+				_windowOp(params) {
+					const code = this._param(params, 0, 0);
+					if (code === 18) this._response(`\u001b[8;${this.rows};${this.cols}t`);
+				}
+
+				_report(code, priv) {
+					if (code === 5) return this._response("\u001b[0n");
+					if (code === 6) {
+						const y = this.cursor.y + (this.modes.origin ? this.scrollTop : 0) + 1;
+						return this._response(`\u001b[${y};${this.cursor.x + 1}R`);
+					}
+					if (code === 0 && priv === ">") return;
+				}
+
+				/* --------------------------------------------------------------- OSC */
+				_osc(text) {
+					const semicolon = text.indexOf(";");
+					const code = semicolon === -1 ? text : text.slice(0, semicolon);
+					const body = semicolon === -1 ? "" : text.slice(semicolon + 1);
+					if (code === "0" || code === "2") {
+						this.title = body;
+						if (typeof this.onTitle === "function") this.onTitle(body);
+						return;
+					}
+					if (code === "4") {
+						const parts = body.split(";");
+						for (let i = 0; i + 1 < parts.length; i += 2) {
+							const index = /^\d+$/u.test(parts[i]) ? Number(parts[i]) : null;
+							const color = oscColor(parts[i + 1]);
+							if (index !== null && index < 256 && color !== null) this.dynamic.indexed.set(index, color);
+						}
+						return;
+					}
+					if (code === "104") {
+						if (body === "") this.dynamic.indexed.clear();
+						else for (const part of body.split(";")) {
+							const index = /^\d+$/u.test(part) ? Number(part) : null;
+							if (index !== null) this.dynamic.indexed.delete(index);
+						}
+						return;
+					}
+					if (code === "10" || code === "11" || code === "12") {
+						const color = oscColor(body);
+						if (color !== null) {
+							if (code === "10") this.dynamic.foreground = color;
+							else if (code === "11") this.dynamic.background = color;
+							else this.dynamic.cursor = color;
+						}
+						return;
+					}
+					if (code === "110") this.dynamic.foreground = null;
+					else if (code === "111") this.dynamic.background = null;
+					else if (code === "112") this.dynamic.cursor = null;
+				}
+
+				/* ------------------------------------------------------------ geometry */
+				/**
+				 * Resize the grid.
+				 *
+				 * The cursor's line is the anchor: it keeps its absolute line and its
+				 * screen row as far as the new height allows, so a prompt stays at
+				 * the bottom of a shorter screen and keeps its place on a taller one.
+				 * The rows that no longer fit are the ones below the cursor; rows the
+				 * new height needs are added blank at the bottom. A height that grows
+				 * into an existing scrollback simply reveals it, because the screen is
+				 * the tail of the buffer.
+				 */
+				resize(cols, rows) {
+					const nextCols = Math.max(2, cols);
+					const nextRows = Math.max(1, rows);
+					if (nextCols !== this.cols) {
+						for (const row of this.lines) {
+							if (row.cells.length > nextCols) row.cells.length = nextCols;
+							else while (row.cells.length < nextCols) row.cells.push(null);
+							touch(row);
+						}
+						this.cols = nextCols;
+						this._buildTabs();
+					}
+					if (nextRows !== this.rows) {
+						const cursorAbs = this.lines.length - this.rows + this.cursor.y;
+						const keepY = Math.min(this.cursor.y, nextRows - 1);
+						const wantTop = Math.max(0, cursorAbs - keepY);
+						const wantLines = wantTop + nextRows;
+						while (this.lines.length > wantLines) this.lines.pop();
+						while (this.lines.length < wantLines) this.lines.push(newRow(nextCols));
+						this.rows = nextRows;
+						if (this.altActive) {
+							this.scrollTop = 0;
+							this.scrollBottom = nextRows - 1;
+						}
+					}
+					const limit = this.rows + this.scrollbackLimit;
+					while (this.lines.length > limit) this.lines.shift();
+					this.cursor.x = Math.min(this.cursor.x, this.cols - 1);
+					this.cursor.y = Math.min(this.cursor.y, this.rows - 1);
+					this.scrollTop = Math.min(this.scrollTop, this.rows - 1);
+					this.scrollBottom = this.rows - 1;
+					this._lastCell = null;
+				}
+
+				/** The 清屏 button: drop the visible screen and the scrollback. */
+				clearAll() {
+					this.lines = [];
+					for (let i = 0; i < this.rows; i++) this.lines.push(newRow(this.cols));
+					this.cursor.x = 0;
+					this.cursor.y = 0;
+					this.pendingWrap = false;
+					this._lastCell = null;
+				}
+			}
+
+			/** Parse `rgb:rr/gg/bb` and `#rgb`/`#rrggbb` OSC color payloads. */
+			function oscColor(value) {
+				if (typeof value !== "string" || value === "") return null;
+				const rgb = /^rgb:([\da-f]{1,4})\/([\da-f]{1,4})\/([\da-f]{1,4})$/iu.exec(value);
+				if (rgb !== null) {
+					const channels = rgb.slice(1);
+					if (!channels.every((channel) => channel.length === channels[0].length)) return null;
+					return "#" + channels.map((channel) => Math.round(Number.parseInt(channel, 16) * 255 / (16 ** channel.length - 1)).toString(16).padStart(2, "0")).join("");
+				}
+				if (!/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{9}|[\da-f]{12})$/iu.test(value)) return null;
+				const width = (value.length - 1) / 3;
+				const channels = [
+					value.slice(1, width + 1),
+					value.slice(width + 1, 2 * width + 1),
+					value.slice(2 * width + 1)
+				];
+				return "#" + channels.map((channel) => Number.parseInt(channel.padEnd(2, "0").slice(0, 2), 16).toString(16).padStart(2, "0")).join("");
+			}
+
+			return {
+				Screen,
+				THEMES,
+				cpWidth,
+				BASE_256,
+				FLAG_BOLD,
+				FLAG_DIM,
+				FLAG_ITALIC,
+				FLAG_UNDERLINE,
+				FLAG_BLINK,
+				FLAG_INVERSE,
+				FLAG_INVISIBLE,
+				FLAG_STRIKE
+			};
+		}
+		/* ==== @vt-core:end ==== */
+		/* ==== @vt-input:begin — phone keyboard bridge (no DOM construction). Tested by test/vt-input.test.mjs ==== */
+		/**
+		 * The keyboard half of the terminal: one real, visible `<textarea>` that
+		 * the Android IME owns, translated into PTY bytes.
+		 *
+		 * The rules that make a phone keyboard behave, and why each exists:
+		 *
+		 *   insertText is intercepted in `beforeinput` and swallowed
+		 *     The field never accumulates text, so there is no local buffer to
+		 *     diverge from the shell's echo — which is what makes keys "repeat" or
+		 *     "vanish" in a naive implementation. One event, one send.
+		 *   composition is never touched until it ends
+		 *     A Chinese IME needs its composing text to live in the field; we read
+		 *     it at `compositionend` and send it once. Clearing mid-composition
+		 *     is what breaks pinyin input, so no handler here clears while
+		 *     `composing` is set.
+		 *   control keys are handled in `keydown`, printable text never is
+		 *     Soft keyboards report letters with keyCode 229 or not at all; taking
+		 *     text from `keydown` is how keys get duplicated.
+		 *   deletes map to what a shell expects
+		 *     Backspace sends DEL (0x7f), a long-press backspace (deleteWordBackward)
+		 *     sends Ctrl+W, which is what Readline erases a word with.
+		 *
+		 * The controller owns no elements: it attaches to whatever textarea the
+		 * view hands it, which keeps this file testable in plain Node.
+		 */
+		function createVtInput(options) {
+			const element = options.element;
+			const enabled = typeof options.enabled === "function" ? options.enabled : () => true;
+			const applicationCursor = typeof options.applicationCursor === "function" ? options.applicationCursor : () => false;
+			const bracketedPaste = typeof options.bracketedPaste === "function" ? options.bracketedPaste : () => false;
+			const onState = typeof options.onState === "function" ? options.onState : () => {};
+
+			const KEYS = {
+				enter: "\r",
+				backspace: "\u007f",
+				tab: "\t",
+				"shift-tab": "\u001b[Z",
+				escape: "\u001b",
+				up: "\u001b[A",
+				down: "\u001b[B",
+				right: "\u001b[C",
+				left: "\u001b[D",
+				home: "\u001b[H",
+				end: "\u001b[F",
+				pageup: "\u001b[5~",
+				pagedown: "\u001b[6~",
+				insert: "\u001b[2~",
+				delete: "\u001b[3~",
+				"ctrl-a": "\u0001",
+				"ctrl-c": "\u0003",
+				"ctrl-d": "\u0004",
+				"ctrl-e": "\u0005",
+				"ctrl-k": "\u000b",
+				"ctrl-l": "\u000c",
+				"ctrl-r": "\u0012",
+				"ctrl-u": "\u0015",
+				"ctrl-w": "\u0017",
+				"ctrl-z": "\u001a",
+				"ctrl-\\": "\u001c",
+				f1: "\u001bOP",
+				f2: "\u001bOQ",
+				f3: "\u001bOR",
+				f4: "\u001bOS",
+				f5: "\u001b[15~",
+				f6: "\u001b[17~",
+				f7: "\u001b[18~",
+				f8: "\u001b[19~",
+				f9: "\u001b[20~",
+				f10: "\u001b[21~",
+				f11: "\u001b[23~",
+				f12: "\u001b[24~"
+			};
+			const CURSOR_KEYS = new Set(["up", "down", "right", "left", "home", "end"]);
+			const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock", "Dead", "Unidentified", "Process"]);
+
+			let composing = false;
+			let composingText = "";
+			let ctrlArmed = false;
+			let lastSent = null;
+			let lastSentAt = 0;
+			/* Set only between a composition end and the input event it produces, so
+			 * an ordinary repeated insertion (paste twice) is never mistaken for an
+			 * echo of the composition. */
+			let echoGuard = false;
+			/* A composition that a blur abandoned: the IME may still deliver a
+			 * compositionend for it afterwards, and that text must not surface in
+			 * a terminal the user has already left. */
+			let abandoned = false;
+			let clearTimer = null;
+			let attached = false;
+			/* A key pressed while the IME is still composing: the text goes first,
+			 * the key follows, so Enter after a pinyin word runs the command
+			 * instead of an empty line. */
+			let pendingKey = null;
+			let pendingTimer = null;
+			const COMPOSITION_ECHO_MS = 400;
+
+			function now() {
+				return typeof Date.now === "function" ? Date.now() : 0;
+			}
+
+			/** True when `text` is the echo of a composition we just handed over. */
+			function isEcho(text) {
+				return text === lastSent && now() - lastSentAt < COMPOSITION_ECHO_MS;
+			}
+
+			function send(data) {
+				if (data === "" || data === null || data === undefined) return;
+				if (!enabled()) return;
+				onState("send", data);
+				options.onData(data);
+			}
+
+			/** Empty the field without touching the IME's composing region. */
+			function clearBuffer() {
+				if (composing) return;
+				try {
+					element.value = "";
+					if (typeof element.setSelectionRange === "function") element.setSelectionRange(0, 0);
+				} catch {
+					/* the element may be detached mid-flight */
+				}
+			}
+
+			/**
+			 * Clear after the current task, and only if the IME did not write
+			 * something newer meanwhile. `lastSent` is dropped with it so typing the
+			 * same text twice in a row is sent twice.
+			 */
+			function clearBufferSoon() {
+				if (clearTimer !== null) clearTimeout(clearTimer);
+				const expected = element.value;
+				clearTimer = setTimeout(() => {
+					clearTimer = null;
+					if (!composing && element.value === expected) clearBuffer();
+					lastSent = null;
+					echoGuard = false;
+				}, 0);
+			}
+
+			/** Take whatever text the field holds and hand it to the PTY once. */
+			function commitField() {
+				const text = element.value;
+				if (text === "" || isEcho(text)) return;
+				send(text);
+				lastSent = text;
+				lastSentAt = now();
+				clearBufferSoon();
+			}
+
+			/**
+			 * Hold a key until the composition that was in flight has been sent.
+			 * The IME commits on its own in practice; the timer is the path for the
+			 * keyboards that do not.
+			 */
+			function deferKey(name) {
+				pendingKey = name;
+				if (pendingTimer !== null) clearTimeout(pendingTimer);
+				pendingTimer = setTimeout(flushPendingKey, 60);
+			}
+
+			function flushPendingKey() {
+				if (pendingTimer !== null) clearTimeout(pendingTimer);
+				pendingTimer = null;
+				const name = pendingKey;
+				pendingKey = null;
+				if (name === null) return;
+				const sequence = sequenceFor(name);
+				if (sequence !== null) send(sequence);
+			}
+
+			/** Ctrl+<letter> for a sticky on-screen Ctrl key and for real Ctrl events. */
+			function controlByteFor(key) {
+				if (typeof key !== "string" || key.length !== 1) return null;
+				const upper = key.toUpperCase();
+				if (upper >= "A" && upper <= "Z") return String.fromCharCode(upper.charCodeAt(0) - 64);
+				if (key === "@" || key === " ") return "\u0000";
+				if (key === "[") return "\u001b";
+				if (key === "\\") return "\u001c";
+				if (key === "]") return "\u001d";
+				if (key === "^") return "\u001e";
+				if (key === "_") return "\u001f";
+				return null;
+			}
+
+			function sequenceFor(name) {
+				if (CURSOR_KEYS.has(name) && applicationCursor()) return KEYS[name].replace("[", "O");
+				return KEYS[name] === undefined ? null : KEYS[name];
+			}
+
+			/** Send a named key; the on-screen key row and `keydown` share this. */
+			function press(name, fromUser) {
+				const sequence = sequenceFor(name);
+				if (sequence === null) return false;
+				ctrlArmed = false;
+				send(sequence);
+				if (fromUser) clearBuffer();
+				return true;
+			}
+
+			function armCtrl(value) {
+				ctrlArmed = value === undefined ? !ctrlArmed : value;
+				onState("ctrl", ctrlArmed);
+				return ctrlArmed;
+			}
+
+			/** Printable text from the IME, the extra key row or a programmatic insert. */
+			function insertText(text) {
+				if (typeof text !== "string" || text === "") return;
+				if (ctrlArmed && text.length === 1) {
+					const byte = controlByteFor(text);
+					ctrlArmed = false;
+					onState("ctrl", false);
+					if (byte !== null) {
+						send(byte);
+						return;
+					}
+				}
+				ctrlArmed = false;
+				send(text);
+			}
+
+			function pasteText(text) {
+				if (typeof text !== "string" || text === "") return;
+				const body = text.replace(/\r\n?/gu, "\n").replace(/\n/gu, "\r");
+				if (bracketedPaste()) send(`\u001b[200~${body}\u001b[201~`);
+				else send(body);
+			}
+
+			/* ------------------------------------------------------------ listeners */
+
+			function onKeyDown(event) {
+				if (event.isComposing || event.keyCode === 229) return;
+				const key = event.key;
+				if (typeof key !== "string" || MODIFIER_KEYS.has(key)) return;
+
+				let name = null;
+				if (key === "Enter") name = "enter";
+				else if (key === "Backspace") name = "backspace";
+				else if (key === "Tab") name = event.shiftKey ? "shift-tab" : "tab";
+				else if (key === "Escape") name = "escape";
+				else if (key === "ArrowUp") name = "up";
+				else if (key === "ArrowDown") name = "down";
+				else if (key === "ArrowLeft") name = "left";
+				else if (key === "ArrowRight") name = "right";
+				else if (key === "Home") name = "home";
+				else if (key === "End") name = "end";
+				else if (key === "PageUp") name = "pageup";
+				else if (key === "PageDown") name = "pagedown";
+				else if (key === "Insert") name = "insert";
+				else if (key === "Delete") name = "delete";
+				else if (/^F\d{1,2}$/u.test(key)) name = key.toLowerCase();
+
+				/* A composition that is still open owns the field until it ends:
+				 * let it commit, then send the key. Never clear the field here —
+				 * re-writing an input mid-composition is what makes IMEs repeat
+				 * characters on Android. */
+				if (composing) {
+					const pending = element.value;
+					if (pending !== "" && !isEcho(pending)) {
+						send(pending);
+						lastSent = pending;
+						lastSentAt = now();
+					}
+					event.preventDefault();
+					if (name !== null) deferKey(name);
+					return;
+				}
+
+				if (event.ctrlKey && !event.altKey && !event.metaKey) {
+					const bytes = controlByteFor(key);
+					if (bytes !== null) {
+						event.preventDefault();
+						send(bytes);
+						return;
+					}
+				}
+				if ((event.altKey || event.metaKey) && !event.ctrlKey && key.length === 1) {
+					event.preventDefault();
+					send(`\u001b${key}`);
+					return;
+				}
+				if (key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+				if (name === null) return;
+				event.preventDefault();
+				press(name, true);
+			}
+
+			function onBeforeInput(event) {
+				if (event.isComposing || composing) return;
+				const type = event.inputType;
+				if (type === "insertText") {
+					/* Swallow the insertion so the field stays empty; this is the
+					 * single send for this keystroke. */
+					event.preventDefault();
+					const text = typeof event.data === "string" ? event.data : element.value;
+					if (typeof text === "string" && text !== "") insertText(text);
+					else commitField();
+					return;
+				}
+				if (type === "deleteContentBackward" || type === "deleteContentForward") {
+					event.preventDefault();
+					send(type === "deleteContentBackward" ? "\u007f" : "\u001b[3~");
+					return;
+				}
+				if (type === "deleteWordBackward") {
+					event.preventDefault();
+					send("\u0017");
+					return;
+				}
+				if (type === "deleteSoftLineBackward" || type === "deleteHardLineBackward") {
+					event.preventDefault();
+					send("\u0015");
+					return;
+				}
+				if (type === "insertLineBreak" || type === "insertParagraph") {
+					event.preventDefault();
+					send("\r");
+					return;
+				}
+				/* insertFromPaste / insertReplacementText / drag: let them land, the
+				 * `input` handler reads the field once. */
+			}
+
+			function onInput(event) {
+				if (composing || event.isComposing) return;
+				const value = typeof element.value === "string" ? element.value : "";
+				if (value === "") return;
+				if (echoGuard && isEcho(value)) {
+					/* The echo of the composition we already sent. */
+					echoGuard = false;
+					clearBuffer();
+					return;
+				}
+				echoGuard = false;
+				send(value);
+				clearBufferSoon();
+			}
+
+			function onCompositionStart() {
+				composing = true;
+				composingText = "";
+				echoGuard = false;
+				abandoned = false;
+				onState("composing", "");
+			}
+
+			function onCompositionUpdate(event) {
+				composingText = typeof event.data === "string" ? event.data : element.value;
+				onState("composing", composingText);
+			}
+
+			function onCompositionEnd(event) {
+				composing = false;
+				if (abandoned) {
+					abandoned = false;
+					composingText = "";
+					clearBuffer();
+					onState("composing", "");
+					return;
+				}
+				const value = typeof element.value === "string" ? element.value : "";
+				const text = value !== "" ? value : (event.data ?? composingText);
+				composingText = "";
+				onState("composing", "");
+				if (typeof text === "string" && text !== "" && !isEcho(text)) {
+					send(text);
+					lastSent = text;
+					lastSentAt = now();
+					echoGuard = true;
+					clearBufferSoon();
+				} else clearBuffer();
+				flushPendingKey();
+			}
+
+			function onBlur() {
+				/* A half-typed composition that lost focus must not be replayed. */
+				if (composing) abandoned = true;
+				composing = false;
+				composingText = "";
+				lastSent = null;
+				echoGuard = false;
+				pendingKey = null;
+				if (pendingTimer !== null) clearTimeout(pendingTimer);
+				pendingTimer = null;
+				clearBuffer();
+				onState("composing", "");
+			}
+
+			function attach() {
+				if (attached || element === undefined || element === null) return;
+				attached = true;
+				element.addEventListener("keydown", onKeyDown);
+				element.addEventListener("beforeinput", onBeforeInput);
+				element.addEventListener("input", onInput);
+				element.addEventListener("compositionstart", onCompositionStart);
+				element.addEventListener("compositionupdate", onCompositionUpdate);
+				element.addEventListener("compositionend", onCompositionEnd);
+				element.addEventListener("blur", onBlur);
+			}
+
+			function detach() {
+				if (!attached) return;
+				attached = false;
+				if (clearTimer !== null) clearTimeout(clearTimer);
+				clearTimer = null;
+				if (pendingTimer !== null) clearTimeout(pendingTimer);
+				pendingTimer = null;
+				pendingKey = null;
+				element.removeEventListener("keydown", onKeyDown);
+				element.removeEventListener("beforeinput", onBeforeInput);
+				element.removeEventListener("input", onInput);
+				element.removeEventListener("compositionstart", onCompositionStart);
+				element.removeEventListener("compositionupdate", onCompositionUpdate);
+				element.removeEventListener("compositionend", onCompositionEnd);
+				element.removeEventListener("blur", onBlur);
+			}
+
+			return {
+				attach,
+				detach,
+				press,
+				armCtrl,
+				insertText,
+				pasteText,
+				commitField,
+				clearBuffer,
+				send,
+				keys: KEYS,
+				isComposing: () => composing,
+				isCtrlArmed: () => ctrlArmed,
+				composingText: () => composingText
+			};
+		}
+		/* ==== @vt-input:end ==== */
+		/* ==== @vt-view:begin — DOM painter + keys row for one terminal screen ==== */
+		/**
+		 * Paint a {@link Screen} into a scrollable column of plain text rows.
+		 *
+		 * Plain text is the point: the browser's own selection, long-press handles
+		 * and copy action are the only selection a phone has, and they only exist
+		 * for real text nodes. Rows are reused and repainted from their `rev`
+		 * counter, so a command that prints a thousand lines costs the rows that
+		 * changed rather than the whole buffer.
+		 *
+		 * The caret and the IME pre-edit are drawn *in the text flow* at the cursor
+		 * column, which keeps them aligned no matter how the platform's monospace
+		 * fallback measures CJK glyphs, and the real `<textarea>` sits invisibly on
+		 * the cursor's row so Android anchors the keyboard and its candidate window
+		 * where the user is looking.
+		 */
+		function createVtView(options) {
+			const doc = options.document;
+			/* Swappable: the panel keeps one view (and therefore one textarea for
+			 * the IME) and points it at the active tab's screen. */
+			let screen = options.screen;
+			const input = options.input;
+			const t = options.t;
+			/* The environment is injectable so the painter and the keyboard
+			 * recovery can be driven from a test without a browser. */
+			const win = options.window === undefined ? (typeof window === "undefined" ? null : window) : options.window;
+			const nav = options.navigator === undefined ? (typeof navigator === "undefined" ? null : navigator) : options.navigator;
+			const haptic = options.haptic === undefined || options.haptic === null ? { tap: () => false } : options.haptic;
+			const flags = options.flags;
+			const cellWidthOf = options.cellWidth;
+			const onResize = options.onResize;
+			const onMessage = options.onMessage === undefined ? () => {} : options.onMessage;
+			const LINE_HEIGHT = 18;
+			const MAX_ROWS = 2000;
+			/* Focus recovery: four attempts inside a short window after a tap. The
+			 * window is what stops the panel from fighting a user who closed the
+			 * keyboard on purpose. */
+			const KEYBOARD_ATTEMPTS = 4;
+			const KEYBOARD_RETRY_MS = 90;
+			const KEYBOARD_WINDOW_MS = 1500;
+			const nowMs = options.now === undefined ? () => Date.now() : options.now;
+			const requestFrame = typeof requestAnimationFrame === "function"
+				? requestAnimationFrame
+				: (callback) => setTimeout(callback, 16);
+			const BLANK_STYLE = Object.freeze({
+				fg: null,
+				bg: null,
+				bold: false,
+				dim: false,
+				italic: false,
+				underline: false,
+				strike: false,
+				blink: false
+			});
+
+			/* ------------------------------------------------------------- elements */
+			const root = doc.createElement("div");
+			root.className = "dsv-root";
+			const viewport = doc.createElement("div");
+			viewport.className = "dsv-viewport";
+			const linesEl = doc.createElement("div");
+			linesEl.className = "dsv-lines";
+			/* The panel owns the textarea so the same element can be handed to
+			 * the input controller; a standalone view makes its own. */
+			const textarea = options.textarea === undefined ? doc.createElement("textarea") : options.textarea;
+			textarea.className = "dsv-input";
+			textarea.setAttribute("autocorrect", "off");
+			textarea.setAttribute("autocapitalize", "none");
+			textarea.setAttribute("autocomplete", "off");
+			textarea.setAttribute("spellcheck", "false");
+			textarea.setAttribute("enterkeyhint", "send");
+			textarea.setAttribute("rows", "1");
+			textarea.setAttribute("wrap", "off");
+			textarea.setAttribute("aria-label", options.label);
+			linesEl.appendChild(textarea);
+			viewport.appendChild(linesEl);
+			root.appendChild(viewport);
+
+			/* ------------------------------------------------------------ key row */
+			const keysEl = doc.createElement("div");
+			keysEl.className = "dsv-keys";
+			const KEY_ROW = [
+				["escape", "Esc", "termKeyEsc"],
+				["tab", "Tab", "termKeyTab"],
+				["ctrl", "Ctrl", "termKeyCtrl"],
+				["left", "\u2190", "termKeyLeft"],
+				["up", "\u2191", "termKeyUp"],
+				["down", "\u2193", "termKeyDown"],
+				["right", "\u2192", "termKeyRight"],
+				["ctrl-c", "^C", "termKeyInterrupt"],
+				["paste", null, "termPaste"],
+				["copy", null, "termCopy"]
+			];
+			let ctrlButton = null;
+			for (const [name, glyph, labelKey] of KEY_ROW) {
+				const button = doc.createElement("button");
+				button.type = "button";
+				button.className = "dsv-key";
+				button.textContent = glyph === null ? t(labelKey) : glyph;
+				button.setAttribute("aria-label", t(labelKey));
+				/* Never let the key row take focus: on Android that closes the
+				 * keyboard the user needs for the next character. */
+				button.addEventListener("pointerdown", (event) => {
+					if (typeof event.preventDefault === "function") event.preventDefault();
+				});
+				button.addEventListener("click", () => {
+					haptic.tap();
+					activateKey(name, button);
+				});
+				keysEl.appendChild(button);
+				if (name === "ctrl") ctrlButton = button;
+			}
+			root.appendChild(keysEl);
+
+			/* -------------------------------------------------------------- state */
+			const nodes = [];
+			let nodesStart = 0;
+			let composingText = "";
+			let paintQueued = false;
+			let follow = true;
+			let cellWidth = 0;
+			let focused = false;
+			let destroyed = false;
+			let focusAttempts = 0;
+			let focusTimer = null;
+			let wantKeyboardUntil = -Infinity;
+			let selfBlur = false;
+
+			const jump = doc.createElement("button");
+			jump.type = "button";
+			jump.className = "dsv-jump";
+			jump.textContent = "\u2193";
+			jump.setAttribute("aria-label", t("termJumpToBottom"));
+			jump.addEventListener("click", () => {
+				haptic.tap();
+				scrollToBottom();
+			});
+			viewport.appendChild(jump);
+
+			function activateKey(name, button) {
+				if (name === "ctrl") {
+					button.setAttribute("aria-pressed", input.armCtrl() ? "true" : "false");
+					return;
+				}
+				if (name === "paste") {
+					const clipboard = nav === null ? undefined : nav.clipboard;
+					if (clipboard === undefined || typeof clipboard.readText !== "function") {
+						onMessage(t("termPasteHint"));
+						return;
+					}
+					clipboard.readText().then((text) => input.pasteText(text), () => onMessage(t("termPasteHint")));
+					return;
+				}
+				if (name === "copy") {
+					const selection = typeof doc.getSelection === "function" ? doc.getSelection() : null;
+					const text = selection === null ? "" : String(selection);
+					if (text === "") {
+						onMessage(t("termCopyHint"));
+						return;
+					}
+					const clipboard = nav === null ? undefined : nav.clipboard;
+					if (clipboard === undefined || typeof clipboard.writeText !== "function") {
+						onMessage(t("termCopyHint"));
+						return;
+					}
+					clipboard.writeText(text).then(() => onMessage(t("termCopied")), () => onMessage(t("termCopyHint")));
+					return;
+				}
+				input.press(name, true);
+			}
+
+			/* ------------------------------------------------------------- theme */
+			function applyTheme(name) {
+				root.setAttribute("data-dsv-theme", name);
+				root.style.setProperty("--dsv-bg", screen.defaultBg);
+				root.style.setProperty("--dsv-fg", screen.defaultFg);
+				root.style.setProperty("--dsv-cursor", screen.cursorColor);
+				root.style.setProperty("--dsv-cursor-accent", name === "light" ? "#ffffff" : "#10131a");
+				root.style.setProperty("--dsv-selection", screen.palette.selectionBg);
+				root.style.setProperty("--dsv-compose", name === "light" ? "#dbe7ff" : "#243050");
+			}
+
+			/* ------------------------------------------------------------ painting */
+			function measureCellWidth() {
+				if (cellWidth > 0) return cellWidth;
+				const probe = doc.createElement("span");
+				probe.style.position = "absolute";
+				probe.style.visibility = "hidden";
+				probe.style.whiteSpace = "pre";
+				probe.style.font = "inherit";
+				probe.textContent = "0".repeat(40);
+				linesEl.appendChild(probe);
+				const width = probe.getBoundingClientRect().width / 40;
+				linesEl.removeChild(probe);
+				cellWidth = width > 0 ? width : 7.8;
+				return cellWidth;
+			}
+
+			function styleFor(cell) {
+				const value = cell.flags;
+				let fg = screen.colorOf(cell.fg, screen.defaultFg);
+				let bg = cell.bg === null || cell.bg === undefined ? null : screen.colorOf(cell.bg, null);
+				if ((value & flags.FLAG_INVERSE) !== 0) {
+					const swap = fg;
+					fg = bg === null ? screen.defaultBg : bg;
+					bg = swap;
+				}
+				if ((value & flags.FLAG_INVISIBLE) !== 0) fg = "transparent";
+				return {
+					fg,
+					bg,
+					bold: (value & flags.FLAG_BOLD) !== 0,
+					dim: (value & flags.FLAG_DIM) !== 0,
+					italic: (value & flags.FLAG_ITALIC) !== 0,
+					underline: (value & flags.FLAG_UNDERLINE) !== 0,
+					strike: (value & flags.FLAG_STRIKE) !== 0,
+					blink: (value & flags.FLAG_BLINK) !== 0
+				};
+			}
+
+			function sameStyle(left, right) {
+				return left.fg === right.fg
+					&& left.bg === right.bg
+					&& left.bold === right.bold
+					&& left.dim === right.dim
+					&& left.italic === right.italic
+					&& left.underline === right.underline
+					&& left.strike === right.strike
+					&& left.blink === right.blink;
+			}
+
+			/** Build one style run into a span, or plain text when it has no styling. */
+			function spanFor(part) {
+				const span = doc.createElement("span");
+				span.textContent = part.text;
+				const style = part.style;
+				if (style !== BLANK_STYLE) {
+					span.style.color = style.fg;
+					if (style.bg !== null && style.bg !== undefined) span.style.background = style.bg;
+					if (style.bold) span.style.fontWeight = "600";
+					if (style.italic) span.style.fontStyle = "italic";
+					if (style.dim) span.style.opacity = "0.72";
+					if (style.blink) span.style.animation = "dsv-blink 1s step-end infinite";
+					if (style.underline || style.strike) {
+						const decorations = [];
+						if (style.underline) decorations.push("underline");
+						if (style.strike) decorations.push("line-through");
+						span.style.textDecoration = decorations.join(" ");
+					}
+				}
+				return span;
+			}
+
+			/** Cut a row into spans: one per style run, caret and pre-edit included. */
+			function paintRow(el, row, caret) {
+				const cols = screen.cols;
+				const cellAt = (index) => row.cells[index] || null;
+				const glyphAt = (index) => {
+					const cell = cellAt(index);
+					if (cell === null || cell.w === 0) return " ";
+					return cell.ch === "" ? " " : cell.ch;
+				};
+				/* The last column worth drawing: content, a colored blank, or the
+				 * caret. Everything after it is empty screen. */
+				let lastX = -1;
+				for (let x = 0; x < cols; x++) {
+					const cell = cellAt(x);
+					if (cell === null) continue;
+					const hasText = cell.w !== 0 && cell.ch !== "" && cell.ch !== " ";
+					const hasBackground = cell.bg !== null && cell.bg !== undefined;
+					if (hasText || hasBackground) lastX = x;
+				}
+				if (caret !== null) lastX = Math.max(lastX, caret.column);
+				const parts = [];
+				let pending = null;
+				const flush = () => {
+					if (pending !== null) {
+						parts.push(pending);
+						pending = null;
+					}
+				};
+				const pushText = (text, style) => {
+					if (text === "") return;
+					if (pending !== null && sameStyle(pending.style, style)) {
+						pending.text += text;
+						return;
+					}
+					flush();
+					pending = {
+						text,
+						style
+					};
+				};
+				const pushNode = (node) => {
+					flush();
+					parts.push({ node });
+				};
+				let x = 0;
+				while (x <= lastX && x < cols) {
+					if (caret !== null && x === caret.column) {
+						if (caret.text !== "") {
+							const node = doc.createElement("span");
+							node.className = "dsv-compose";
+							node.textContent = caret.text;
+							pushNode(node);
+							x += Math.max(1, caret.width);
+							continue;
+						}
+						const node = doc.createElement("span");
+						node.className = focused ? "dsv-caret" : "dsv-caret-off";
+						node.textContent = glyphAt(x);
+						pushNode(node);
+						x += 1;
+						continue;
+					}
+					const cell = cellAt(x);
+					if (cell === null) {
+						pushText(" ", BLANK_STYLE);
+						x += 1;
+						continue;
+					}
+					if (cell.w === 0) {
+						x += 1;
+						continue;
+					}
+					pushText(cell.ch === "" ? " " : cell.ch, styleFor(cell));
+					x += cell.w === 2 ? 2 : 1;
+				}
+				flush();
+				const children = [];
+				for (const part of parts) {
+					if (part.node !== undefined) children.push(part.node);
+					else if (part.style === BLANK_STYLE) {
+						const span = doc.createElement("span");
+						span.textContent = part.text;
+						children.push(span);
+					} else children.push(spanFor(part));
+				}
+				el.replaceChildren(...children);
+			}
+
+			/** Repaint after the current task, at most once per frame. */
+			function schedule() {
+				if (paintQueued || destroyed) return;
+				paintQueued = true;
+				requestFrame(() => {
+					paintQueued = false;
+					if (!destroyed) paintNow();
+				});
+			}
+
+			function composingWidth() {
+				let width = 0;
+				for (const character of composingText) width += Math.max(0, cellWidthOf(character.codePointAt(0)));
+				return Math.max(1, width);
+			}
+
+			function paintNow() {
+				const total = screen.lineCount;
+				const start = Math.max(0, total - MAX_ROWS);
+				while (nodes.length > 0 && nodesStart < start) {
+					linesEl.removeChild(nodes[0].el);
+					nodes.shift();
+					nodesStart++;
+				}
+				while (nodes.length > 0 && nodesStart + nodes.length > total) {
+					linesEl.removeChild(nodes.pop().el);
+				}
+				if (nodes.length === 0) nodesStart = start;
+				while (nodesStart + nodes.length < total) {
+					const el = doc.createElement("div");
+					el.className = "dsv-row";
+					linesEl.insertBefore(el, textarea);
+					nodes.push({
+						el,
+						row: null,
+						rev: -1,
+						caret: false,
+						cursorX: -1,
+						focused: null,
+						composing: ""
+					});
+				}
+
+				const cursorAbs = screen.cursorAbs;
+				const caretText = composingText;
+				const cursorVisible = screen.cursorVisible !== false;
+				for (let i = 0; i < nodes.length; i++) {
+					const absolute = nodesStart + i;
+					const row = screen.lines[absolute];
+					if (row === undefined) continue;
+					const node = nodes[i];
+					/* The caret is not part of the row content: a program that only
+					 * moves the cursor (Readline arrows, a pager redraw) changes no
+					 * cell, so the cursor position has to be part of the repaint key
+					 * or the painted caret keeps sitting where it was. */
+					const caretOn = absolute === cursorAbs && cursorVisible;
+					const caretColumn = caretOn ? Math.max(0, Math.min(screen.cols - 1, screen.cursor.x)) : -1;
+					const composing = caretOn ? caretText : "";
+					if (node.row === row && node.rev === row.rev && node.caret === caretOn && node.cursorX === caretColumn && node.composing === composing && node.focused === focused) continue;
+					node.row = row;
+					node.rev = row.rev;
+					node.caret = caretOn;
+					node.cursorX = caretColumn;
+					node.composing = composing;
+					node.focused = focused;
+					paintRow(node.el, row, caretOn ? {
+						column: caretColumn,
+						text: caretText,
+						width: composingWidth()
+					} : null);
+				}
+
+				/* Park the invisible textarea on the cursor row so the IME anchors
+				 * where the user is typing. */
+				const offset = cursorAbs - nodesStart;
+				textarea.style.top = `${Math.max(0, offset) * LINE_HEIGHT}px`;
+				if (follow) viewport.scrollTop = viewport.scrollHeight;
+			}
+
+			/* -------------------------------------------------------------- fitting */
+			function fit() {
+				const width = viewport.clientWidth - 16;
+				const height = viewport.clientHeight - 12;
+				if (width <= 0 || height <= 0) return;
+				const cols = Math.max(20, Math.min(400, Math.floor(width / measureCellWidth())));
+				const rows = Math.max(5, Math.min(200, Math.floor(height / LINE_HEIGHT)));
+				if (cols === screen.cols && rows === screen.rows) return;
+				screen.resize(cols, rows);
+				schedule();
+				onResize(cols, rows);
+			}
+
+			function scrollToBottom() {
+				follow = true;
+				viewport.scrollTop = viewport.scrollHeight;
+			}
+
+			/* ------------------------------------------------------- soft keyboard */
+			/**
+			 * Whether the on-screen keyboard is up, judged by how much of the
+			 * layout viewport the visual viewport lost. `null` when the browser
+			 * has no visual viewport to ask (tests, old WebViews).
+			 */
+			function keyboardOpen() {
+				if (win === null || win.visualViewport === undefined || win.visualViewport === null) return null;
+				if (typeof win.innerHeight !== "number") return null;
+				return win.innerHeight - win.visualViewport.height > 120;
+			}
+
+			/** Bring the cursor row into view so the focused field is on screen. */
+			function ensureCaretVisible() {
+				const offset = (screen.cursorAbs - nodesStart) * LINE_HEIGHT;
+				const top = viewport.scrollTop;
+				const height = viewport.clientHeight;
+				if (height <= 0) return;
+				if (offset < top + LINE_HEIGHT) viewport.scrollTop = Math.max(0, offset - LINE_HEIGHT);
+				else if (offset + LINE_HEIGHT > top + height - LINE_HEIGHT) viewport.scrollTop = offset + LINE_HEIGHT * 2 - height;
+			}
+
+			/**
+			 * Show the keyboard, and keep trying until it is really there.
+			 *
+			 * The failure this exists for: an Android WebView keeps
+			 * `document.activeElement` on the textarea after the user dismisses the
+			 * keyboard, and a second `focus()` on an already-focused element is a
+			 * no-op — so the keyboard never comes back. Forcing a blur/focus
+			 * transition is what makes showSoftInput fire again, and the bounded
+			 * retries cover the WebViews that need the field focused *after* the
+			 * layout settles. Every attempt is logged, and giving up says so in the
+			 * panel instead of failing silently.
+			 */
+			function requestKeyboard(reason) {
+				if (destroyed) return;
+				wantKeyboardUntil = nowMs() + KEYBOARD_WINDOW_MS;
+				focusAttempts = 0;
+				attemptFocus(reason);
+			}
+
+			function attemptFocus(reason) {
+				if (destroyed) return;
+				if (focusTimer !== null) {
+					clearTimeout(focusTimer);
+					focusTimer = null;
+				}
+				const active = doc.activeElement;
+				const open = keyboardOpen();
+				if (active === textarea && open !== false) {
+					focusAttempts = 0;
+					return;
+				}
+				if (active === textarea) {
+					/* Focused but the keyboard is gone: force the transition. */
+					selfBlur = true;
+					try {
+						textarea.blur();
+					} catch {
+						/* a detached field cannot blur */
+					}
+					selfBlur = false;
+				}
+				ensureCaretVisible();
+				try {
+					textarea.focus({ preventScroll: true });
+				} catch {
+					textarea.focus();
+				}
+				focusAttempts += 1;
+				if (options.log !== undefined) options.log(`keyboard: attempt ${focusAttempts} (${reason}) active=${doc.activeElement === textarea} open=${String(keyboardOpen())}`);
+				if (focusAttempts >= KEYBOARD_ATTEMPTS) {
+					if (doc.activeElement !== textarea) onMessage(t("termKeyboardHint"));
+					return;
+				}
+				focusTimer = setTimeout(() => attemptFocus(reason), KEYBOARD_RETRY_MS);
+			}
+
+			/* ------------------------------------------------------------ listeners */
+			viewport.addEventListener("scroll", () => {
+				follow = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < LINE_HEIGHT * 2;
+				jump.setAttribute("data-visible", follow ? "false" : "true");
+			});
+			viewport.addEventListener("pointerdown", () => {
+				/* A tap anywhere on the screen brings the keyboard back. */
+				requestKeyboard("tap");
+			});
+			textarea.addEventListener("focus", () => {
+				focused = true;
+				schedule();
+			});
+			textarea.addEventListener("blur", () => {
+				focused = false;
+				if (!selfBlur) focusAttempts = 0;
+				schedule();
+			});
+			/* The keyboard can be dismissed without touching the page (system back,
+		 * gesture). While the user's tap is still fresh, ask for it again; after
+		 * that window we assume they meant to close it. */
+			const onViewportResize = () => {
+				if (destroyed) return;
+				if (nowMs() > wantKeyboardUntil) return;
+				if (keyboardOpen() !== false) return;
+				if (doc.activeElement !== textarea) return;
+				attemptFocus("viewport-resize");
+			};
+			const resizeTarget = win === null ? null : (win.visualViewport === undefined ? win : win.visualViewport);
+			if (resizeTarget !== null && typeof resizeTarget.addEventListener === "function") resizeTarget.addEventListener("resize", onViewportResize);
+
+			return {
+				element: root,
+				viewport,
+				textarea,
+				schedule,
+				paintNow,
+				fit,
+				applyTheme,
+				showCtrlState(value) {
+					if (ctrlButton !== null) ctrlButton.setAttribute("aria-pressed", value ? "true" : "false");
+				},
+				setComposing(text) {
+					if (text === composingText) return;
+					composingText = text;
+					schedule();
+				},
+				/** Point the view at another tab's screen. */
+				setScreen(next) {
+					if (next === screen || next === undefined || next === null) return;
+					screen = next;
+					for (const node of nodes) linesEl.removeChild(node.el);
+					nodes.length = 0;
+					nodesStart = 0;
+					follow = true;
+					viewport.scrollTop = 0;
+					composingText = "";
+					fit();
+					paintNow();
+				},
+				screen: () => screen,
+				focus() {
+					requestKeyboard("focus");
+				},
+				requestKeyboard,
+				/** Test and diagnostic seam: focus attempts in the current request. */
+				focusAttempts: () => focusAttempts,
+				keyboardOpen,
+				scrollToBottom,
+				isFollowing: () => follow,
+				destroy() {
+					destroyed = true;
+					if (focusTimer !== null) clearTimeout(focusTimer);
+					focusTimer = null;
+					if (resizeTarget !== null && typeof resizeTarget.removeEventListener === "function") resizeTarget.removeEventListener("resize", onViewportResize);
+					if (input !== undefined && input !== null) input.detach();
+					root.remove();
+				}
+			};
+		}
+		/* ==== @vt-view:end ==== */
+		/* ==== @vt-store:begin — terminal tab roster (pure logic). Tested by test/vt-store.test.mjs ==== */
+		/**
+		 * The terminal's tab roster: one entry per live PTY, one active tab.
+		 *
+		 * Why a store instead of component state: the sidebar's 终端 button
+		 * remounts this panel every time it is pressed, and the panel used to
+		 * connect the PTY service in its mount effect — so every press spawned
+		 * another shell, and the guest PTY service keeps a session until it is
+		 * told to stop (measured: five presses, five new shells). The roster lives
+		 * one level up, in the plugin, so opening the panel again *activates* the
+		 * terminal that is already there.
+		 *
+		 * Sessions are opaque to this file: `open` makes one, `close` ends it. That
+		 * keeps the roster testable without a browser, a socket, or a shell.
+		 */
+		function createTerminalStore(options) {
+			const open = options.open;
+			const maxTabs = options.maxTabs === undefined ? 4 : options.maxTabs;
+			const onLimit = options.onLimit === undefined ? () => {} : options.onLimit;
+			const listeners = new Set();
+			let sessions = [];
+			let activeId = null;
+
+			function notify() {
+				for (const listener of [...listeners]) {
+					try {
+						listener();
+					} catch {
+						/* one bad subscriber must not stop the roster */
+					}
+				}
+			}
+
+			function indexOf(id) {
+				for (let i = 0; i < sessions.length; i++) if (sessions[i].id === id) return i;
+				return -1;
+			}
+
+			/**
+			 * The only entry point the panel needs: reuse what is there, open one
+			 * only when the roster is empty.
+			 */
+			function ensure() {
+				if (sessions.length === 0) return openTab();
+				if (indexOf(activeId) === -1) activeId = sessions[sessions.length - 1].id;
+				notify();
+				return activeId;
+			}
+
+			function openTab() {
+				if (sessions.length >= maxTabs) {
+					onLimit(maxTabs);
+					notify();
+					return null;
+				}
+				const session = open();
+				if (session === null || session === undefined) return null;
+				sessions = [...sessions, session];
+				activeId = session.id;
+				notify();
+				return session.id;
+			}
+
+			function activate(id) {
+				if (indexOf(id) === -1 || activeId === id) return false;
+				activeId = id;
+				notify();
+				return true;
+			}
+
+			function close(id) {
+				const index = indexOf(id);
+				if (index === -1) return false;
+				const [removed] = sessions.slice(index, index + 1);
+				sessions = [...sessions.slice(0, index), ...sessions.slice(index + 1)];
+				if (removed !== undefined && typeof removed.close === "function") removed.close();
+				if (activeId === id) {
+					const next = sessions[Math.min(index, sessions.length - 1)];
+					activeId = next === undefined ? null : next.id;
+				}
+				notify();
+				return true;
+			}
+
+			function closeAll() {
+				const closing = sessions;
+				sessions = [];
+				activeId = null;
+				for (const session of closing) if (typeof session.close === "function") session.close();
+				notify();
+			}
+
+			return {
+				subscribe(listener) {
+					listeners.add(listener);
+					return () => listeners.delete(listener);
+				},
+				/** Plain data for the renderer: the sessions themselves stay here. */
+				snapshot() {
+					return {
+						activeId,
+						canOpen: sessions.length < maxTabs,
+						maxTabs,
+						tabs: sessions.map((session) => ({
+							id: session.id,
+							title: session.title,
+							status: session.status
+						}))
+					};
+				},
+				ensure,
+				openTab,
+				activate,
+				close,
+				closeAll,
+				/** The session object behind a tab (screen, socket, link, …). */
+				session(id) {
+					const index = indexOf(id === undefined ? activeId : id);
+					return index === -1 ? null : sessions[index];
+				},
+				activeId: () => activeId,
+				count: () => sessions.length,
+				/** A session changed its own status: repaint the tab strip. */
+				touch: notify,
+				rename(id, title) {
+					const index = indexOf(id);
+					if (index === -1) return false;
+					sessions[index].title = title;
+					notify();
+					return true;
+				}
+			};
+		}
+		/* ==== @vt-store:end ==== */
 		/* ====================================================================
 		 * Terminal
 		 * --------------------------------------------------------------------
@@ -1382,365 +4691,456 @@ window.__ModuleLoader__.load({
 		 * ================================================================== */
 
 		const TERMINAL_PANEL = "android-terminal";
-		const XTERM_VERSION = "5";
+		const TERMINAL_SCROLLBACK = 1000;
+		const TERMINAL_MAX_TABS = 4;
 
-		/** xterm is served by the guest PTY service, not bundled here. */
+		/** The guest PTY endpoint the app injects into the WebView. */
 		function ptyEndpoint() {
 			const api = globalThis.DshAndroid;
 			if (api && api.pty && api.pty.url) return api.pty;
 			return null;
 		}
 
-		function loadStylesheet(href, key) {
-			if (document.querySelector(`link[data-dshm="${key}"]`) !== null) return;
-			const link = document.createElement("link");
-			link.rel = "stylesheet";
-			link.href = href;
-			link.dataset.dshm = key;
-			document.head.appendChild(link);
+		/**
+		 * Which palette the harness is painting right now.
+		 *
+		 * The layout's theme presenter publishes the resolved scheme twice: on
+		 * `<html>` as `data-ds-theme-source` and on `<body>` as
+		 * `data-ds-dark-theme`. This panel used to look for the dark attribute on
+		 * `<html>` — where it is never written — and then fall back to
+		 * `prefers-color-scheme`, which answers for the *phone's* dark mode. On a
+		 * phone set to dark with the app set to light, that made the terminal
+		 * black inside a white UI. The boot script writes the same two attributes,
+		 * so this reads them the same way in both worlds.
+		 */
+		function terminalThemeName() {
+			const root = document.documentElement;
+			const source = root.dataset === undefined ? undefined : root.dataset.dsThemeSource;
+			if (source === "light" || source === "dark") return source;
+			if (document.body !== null && document.body.hasAttribute("data-ds-dark-theme")) return "dark";
+			if (root.hasAttribute("data-ds-dark-theme")) return "dark";
+			if (typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+			return "light";
 		}
 
-		let xtermPromise = null;
-
-		function loadScript(src) {
-			return new Promise((resolve, reject) => {
-				const script = document.createElement("script");
-				script.src = src;
-				script.onload = () => resolve();
-				script.onerror = () => reject(new Error("无法从沙箱加载 " + src));
-				document.head.appendChild(script);
+		/**
+		 * One PTY session: its own screen, socket and status.
+		 *
+		 * Sessions outlive the panel on purpose — that is what makes the rail
+		 * button reuse a terminal instead of spawning another shell — so everything
+		 * a session needs is captured here. The panel supplies the two things that
+		 * are per-view: `onOutput` (repaint) and input (through the active
+		 * session's `write`).
+		 */
+		function openTerminalSession(options) {
+			const endpoint = options.endpoint;
+			const t = options.t;
+			const sequence = options.sequence;
+			const onChange = options.onChange;
+			const core = options.core;
+			const screen = new core.Screen({
+				cols: 80,
+				rows: 24,
+				scrollback: TERMINAL_SCROLLBACK
 			});
+			screen.setTheme(terminalThemeName());
+			const session = {
+				id: `pty-${sequence}-${Math.random().toString(36).slice(2, 8)}`,
+				title: t("termTabName", { n: String(sequence) }),
+				status: "connecting",
+				ptyId: null,
+				screen,
+				socket: null,
+				onOutput: null
+			};
+			const link = {
+				socket: null,
+				writable: false,
+				send(payload) {
+					const active = link.socket;
+					if (active === null || active.readyState !== 1) return;
+					try {
+						active.send(JSON.stringify(payload));
+					} catch {
+						/* the socket died between the check and the send */
+					}
+				},
+				write(data) {
+					if (link.writable) link.send({
+						type: "input",
+						data
+					});
+				}
+			};
+			/* Query replies (cursor position, device attributes) are terminal input,
+			 * not user typing: they answer the program that asked. */
+			screen.onResponse = (data) => link.send({
+				type: "input",
+				data
+			});
+			const setStatus = (status) => {
+				session.status = status;
+				onChange();
+			};
+			session.link = link;
+			session.resize = (cols, rows) => link.send({
+				type: "resize",
+				cols,
+				rows
+			});
+			session.write = (data) => link.write(data);
+			/** End the shell and hand the PTY slot back to the guest service. */
+			session.close = () => {
+				link.writable = false;
+				const socket = link.socket;
+				link.socket = null;
+				session.socket = null;
+				session.status = "closed";
+				if (socket !== null) {
+					try {
+						socket.close();
+					} catch {
+						/* already closed */
+					}
+				}
+				const ptyId = session.ptyId;
+				session.ptyId = null;
+				if (ptyId !== null) {
+					try {
+						fetch(`${endpoint.url}/sessions/${ptyId}`, {
+							method: "DELETE",
+							headers: { "X-Dsh-Token": endpoint.token ?? "" },
+							keepalive: true
+						}).catch(() => {});
+					} catch {
+						/* the page is going away */
+					}
+				}
+			};
+			const url = `${endpoint.url.replace(/^http/, "ws")}/pty?token=${endpoint.token}`
+				+ `&cols=${screen.cols}&rows=${screen.rows}`;
+			const socket = new WebSocket(url);
+			socket.binaryType = "arraybuffer";
+			link.socket = socket;
+			session.socket = socket;
+			socket.onopen = () => {
+				link.writable = true;
+				setStatus("ready");
+				link.send({
+					type: "resize",
+					cols: screen.cols,
+					rows: screen.rows
+				});
+			};
+			socket.onmessage = (event) => {
+				/* Binary = raw terminal output. Text = JSON control frames. */
+				if (typeof event.data !== "string") {
+					screen.write(new Uint8Array(event.data));
+					if (typeof session.onOutput === "function") session.onOutput();
+					return;
+				}
+				let control = null;
+				try {
+					control = JSON.parse(event.data);
+				} catch {
+					control = null;
+				}
+				if (control !== null && typeof control.type === "string") {
+					if (control.type === "ready" && typeof control.id === "string") session.ptyId = control.id;
+					else if (control.type === "exit") setStatus("exited");
+					return;
+				}
+				screen.write(event.data);
+				if (typeof session.onOutput === "function") session.onOutput();
+			};
+			socket.onclose = () => {
+				link.writable = false;
+				if (session.status !== "closed") setStatus("disconnected");
+			};
+			socket.onerror = () => {
+				link.writable = false;
+				if (session.status !== "closed") setStatus("error");
+			};
+			return session;
 		}
 
-		function loadXterm(endpoint) {
-			if (globalThis.Terminal !== undefined) return Promise.resolve(globalThis.Terminal);
-			if (xtermPromise !== null) return xtermPromise;
-			xtermPromise = (async () => {
-				loadStylesheet(`${endpoint.url}/assets/xterm.css?token=${endpoint.token}`, "xterm-css");
-				const query = `?token=${endpoint.token}&v=${XTERM_VERSION}`;
-				await loadScript(`${endpoint.url}/assets/xterm.js${query}`);
-				if (globalThis.Terminal === undefined) throw new Error("xterm 未加载");
-				// Optional: the fit addon measures real cell metrics, and the canvas
-				// renderer is far cheaper than the DOM one on a phone. Both are
-				// optional — a missing addon must not cost the user a terminal.
-				await loadScript(`${endpoint.url}/assets/addon-fit.js${query}`).catch(() => {});
-				await loadScript(`${endpoint.url}/assets/addon-canvas.js${query}`).catch(() => {});
-				return globalThis.Terminal;
-			})();
-			return xtermPromise;
-		}
-
-		function isDark() {
-			return document.documentElement.hasAttribute("data-ds-dark-theme")
-				|| (globalThis.matchMedia !== undefined && matchMedia("(prefers-color-scheme: dark)").matches
-					&& !document.documentElement.hasAttribute("data-ds-light-theme"));
-		}
-
-		function terminalTheme() {
-			return isDark()
-				? { background: "#14161a", foreground: "#e8eaed", cursor: "#4c8dff",
-					selectionBackground: "#2c3a55", black: "#14161a", brightBlack: "#5f6368" }
-				: { background: "#ffffff", foreground: "#1f2329", cursor: "#4c8dff",
-					selectionBackground: "#cfe0ff", black: "#1f2329", brightBlack: "#8a9099" };
-		}
-
+		/**
+		 * The tab strip and the screen, driven by the plugin's terminal store.
+		 *
+		 * One view serves every tab: the textarea the Android IME owns is a single
+		 * element for the whole panel, so switching tabs is a screen swap and
+		 * cannot lose (or fight over) the keyboard.
+		 */
 		function TerminalPanel(props) {
 			const t = props.t;
+			const store = props.store;
 			const host = react.useRef(null);
-			const termRef = react.useRef(null);
-			const socketRef = react.useRef(null);
-			const fitRef = react.useRef(null);
-			const [status, setStatus] = react.useState("idle");
+			const viewRef = react.useRef(null);
+			const hapticRef = react.useRef(null);
+			const [roster, setRoster] = react.useState(() => store.snapshot());
 			const [message, setMessage] = react.useState("");
-			const [draft, setDraft] = react.useState("");
-			const historyRef = react.useRef([]);
-			const historyIndexRef = react.useRef(-1);
+			const [themeName, setThemeName] = react.useState(() => terminalThemeName());
 			const endpoint = ptyEndpoint();
 
-			/**
-			 * Send a whole line to the shell.
-			 *
-			 * This is the primary input path on a phone: the terminal's own hidden
-			 * textarea is a magnet for IME composition events, and a Chinese IME
-			 * happily pushes its candidate and clipboard list through it, which
-			 * xterm then echoes as if it were typed. A real <input> is what the IME
-			 * was designed for, so the command goes in there and is sent as one line.
-			 */
-			const sendLine = (text) => {
-				const socket = socketRef.current;
-				if (socket === null || socket.readyState !== 1) {
-					setMessage(t("termDisconnected") + "（终端未连上，点左侧终端图标重开一次）");
-					return;
-				}
-				const line = text ?? draft;
-				// Text frame: the JSON input path is the one exercised end to end.
-				// Output stays binary (that is where the volume is), but a keystroke
-				// is a few bytes and this path is known to work.
-				socket.send(JSON.stringify({ type: "input", data: line + "\r" }));
-				if (line.trim() !== "") {
-					historyRef.current = [line].concat(historyRef.current).slice(0, 50);
-				}
-				historyIndexRef.current = -1;
-				setDraft("");
-				if (termRef.current !== null) termRef.current.focus();
-			};
+			react.useEffect(() => store.subscribe(() => setRoster(store.snapshot())), [store]);
 
-			const recall = (direction) => {
-				const history = historyRef.current;
-				if (history.length === 0) return;
-				let index = historyIndexRef.current + direction;
-				if (index < 0) index = 0;
-				if (index >= history.length) {
-					historyIndexRef.current = -1;
-					setDraft("");
-					return;
-				}
-				historyIndexRef.current = index;
-				setDraft(history[index]);
-			};
-
-			const paste = async () => {
-				try {
-					const text = await navigator.clipboard.readText();
-					if (typeof text === "string" && text !== "") setDraft((d) => d + text);
-				} catch (error) {
-					setMessage(t("termPaste") + "：请长按输入框粘贴");
-				}
-			};
-
+			/* The harness theme can change under us; follow both attributes it
+			 * writes, on the two nodes it writes them to. */
 			react.useEffect(() => {
-				if (endpoint === null) {
-					setStatus("unavailable");
-					return undefined;
-				}
-				let disposed = false;
-				let socket = null;
-				let term = null;
-				let observer = null;
-
-				(async () => {
-					try {
-						const Terminal = await loadXterm(endpoint);
-						if (disposed) return;
-						term = new Terminal({
-							convertEol: false,
-							cursorBlink: true,
-							fontSize: 13,
-							fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-							scrollback: 4000,
-							theme: terminalTheme(),
-							allowProposedApi: true
-						});
-						termRef.current = term;
-						term.open(host.current);
-
-						// Prefer the fit addon (real cell metrics); fall back to the
-						// rough 8x17 estimate if it did not load.
-						let fitAddon = null;
-						if (globalThis.FitAddon !== undefined && globalThis.FitAddon.FitAddon !== undefined) {
-							try {
-								fitAddon = new globalThis.FitAddon.FitAddon();
-								term.loadAddon(fitAddon);
-							} catch {
-								fitAddon = null;
-							}
-						}
-						if (globalThis.CanvasAddon !== undefined && globalThis.CanvasAddon.CanvasAddon !== undefined) {
-							try {
-								term.loadAddon(new globalThis.CanvasAddon.CanvasAddon());
-							} catch {
-								/* keep the DOM renderer */
-							}
-						}
-						const fit = () => {
-							const element = host.current;
-							if (element === null || term === null) return;
-							if (fitAddon !== null) {
-								try {
-									fitAddon.fit();
-									return;
-								} catch {
-									/* fall through to the estimate */
-								}
-							}
-							const cols = Math.max(20, Math.floor((element.clientWidth - 8) / 8));
-							const rows = Math.max(5, Math.floor((element.clientHeight - 8) / 17));
-							try {
-								term.resize(cols, rows);
-							} catch {
-								/* not open yet */
-							}
-						};
-						fitRef.current = fit;
-						fit();
-						// Ask the IME to keep its guesses out of the terminal's hidden
-						// textarea; typing happens in the input bar below.
-						const helper = host.current === null
-							? null : host.current.querySelector(".xterm-helper-textarea");
-						if (helper !== null) {
-							helper.setAttribute("autocorrect", "off");
-							helper.setAttribute("autocapitalize", "none");
-							helper.setAttribute("autocomplete", "off");
-							helper.setAttribute("spellcheck", "false");
-							helper.setAttribute("enterkeyhint", "send");
-						}
-
-						const url = `${endpoint.url.replace(/^http/, "ws")}/pty?token=${endpoint.token}`
-							+ `&cols=${term.cols}&rows=${term.rows}`;
-						setStatus("connecting");
-						socket = new WebSocket(url);
-						socket.binaryType = "arraybuffer";
-						socketRef.current = socket;
-						socket.onopen = () => {
-							setStatus("ready");
-							setMessage("");
-							fit();
-							socket.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-						};
-						socket.onmessage = (event) => {
-							// Binary = raw terminal output, written straight through.
-							// Text = control frames only, so no JSON parse on the hot path.
-							if (typeof event.data !== "string") {
-								term.write(new Uint8Array(event.data));
-								return;
-							}
-							let control = null;
-							try {
-								control = JSON.parse(event.data);
-							} catch {
-								control = null;
-							}
-							if (control !== null && typeof control.type === "string") {
-								if (control.type === "exit") {
-									setStatus("exited");
-									setMessage(`会话已退出（code ${control.code ?? "—"}）`);
-								}
-								return;
-							}
-							term.write(event.data);
-						};
-						socket.onclose = () => {
-							if (!disposed) setStatus("disconnected");
-						};
-						socket.onerror = () => {
-							if (!disposed) setStatus("error");
-						};
-						term.onData((data) => {
-							if (socket !== null && socket.readyState === 1) {
-								socket.send(JSON.stringify({ type: "input", data }));
-							}
-						});
-						term.onResize(({ cols, rows }) => {
-							if (socket !== null && socket.readyState === 1) {
-								socket.send(JSON.stringify({ type: "resize", cols, rows }));
-							}
-						});
-
-						observer = new ResizeObserver(() => {
-							if (fitRef.current) fitRef.current();
-						});
-						observer.observe(host.current);
-					} catch (error) {
-						if (!disposed) {
-							setStatus("error");
-							setMessage(String(error?.message ?? error));
-						}
-					}
-				})();
-
+				const sync = () => setThemeName(terminalThemeName());
+				const observer = new MutationObserver(sync);
+				observer.observe(document.documentElement, {
+					attributes: true,
+					attributeFilter: ["data-ds-theme-source", "data-ds-dark-theme"]
+				});
+				if (document.body !== null) observer.observe(document.body, {
+					attributes: true,
+					attributeFilter: ["data-ds-dark-theme"]
+				});
+				const media = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+				if (media !== null && typeof media.addEventListener === "function") media.addEventListener("change", sync);
+				sync();
 				return () => {
-					disposed = true;
-					if (observer !== null) observer.disconnect();
-					if (socket !== null) {
-						try {
-							socket.close();
-						} catch {
-							/* already closed */
-						}
-					}
-					if (term !== null) {
-						try {
-							term.dispose();
-						} catch {
-							/* already disposed */
-						}
-					}
-					socketRef.current = null;
-					termRef.current = null;
-					fitRef.current = null;
+					observer.disconnect();
+					if (media !== null && typeof media.removeEventListener === "function") media.removeEventListener("change", sync);
 				};
 			}, []);
 
 			react.useEffect(() => {
-				const observer = new MutationObserver(() => {
-					if (termRef.current !== null) termRef.current.options.theme = terminalTheme();
-				});
-				observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ds-dark-theme", "class"] });
-				return () => observer.disconnect();
-			}, []);
+				for (const tab of store.snapshot().tabs) {
+					const session = store.session(tab.id);
+					if (session !== null) session.screen.setTheme(themeName);
+				}
+				const view = viewRef.current;
+				if (view === null) return;
+				view.applyTheme(themeName);
+				view.schedule();
+			}, [themeName, store]);
 
+			/* A panel with no terminal opens one; closing the last tab opens a fresh
+			 * one, so the screen host below always has a session behind it. */
+			react.useEffect(() => {
+				if (endpoint === null) return;
+				if (store.count() === 0) store.ensure();
+			}, [endpoint, store, roster.tabs.length]);
+
+			react.useEffect(() => {
+				if (endpoint === null) return undefined;
+				const hostEl = host.current;
+				if (hostEl === null) return undefined;
+				const session = store.session();
+				if (session === null) return undefined;
+				const haptic = createVtHaptic({
+					call: bridge() === null ? null : (path, body) => call(path, body),
+					vibrate: typeof navigator !== "undefined" && typeof navigator.vibrate === "function"
+						? (ms) => navigator.vibrate(ms)
+						: null
+				});
+				hapticRef.current = haptic;
+				const textarea = document.createElement("textarea");
+				const input = createVtInput({
+					element: textarea,
+					enabled: () => {
+						const active = store.session();
+						return active !== null && active.link.writable;
+					},
+					applicationCursor: () => {
+						const active = store.session();
+						return active !== null && active.screen.modes.applicationCursor;
+					},
+					bracketedPaste: () => {
+						const active = store.session();
+						return active !== null && active.screen.modes.bracketedPaste;
+					},
+					onData: (data) => {
+						const active = store.session();
+						if (active !== null) active.write(data);
+					},
+					onState: (name, value) => {
+						const view = viewRef.current;
+						if (view === null) return;
+						if (name === "composing") view.setComposing(value);
+						else if (name === "ctrl") view.showCtrlState(value);
+					}
+				});
+				const view = createVtView({
+					document,
+					screen: session.screen,
+					input,
+					textarea,
+					t,
+					flags: terminalFlags,
+					haptic,
+					cellWidth: terminalCellWidth,
+					log: (line) => {
+						if (typeof console !== "undefined" && typeof console.debug === "function") console.debug("android-terminal", line);
+					},
+					label: t("termInputLabel"),
+					onResize: (cols, rows) => {
+						const active = store.session();
+						if (active !== null) active.resize(cols, rows);
+					},
+					onMessage: (text) => setMessage(text)
+				});
+				input.attach();
+				view.applyTheme(themeName);
+				hostEl.appendChild(view.element);
+				viewRef.current = view;
+				session.onOutput = () => view.schedule();
+				view.fit();
+				view.paintNow();
+				view.focus();
+				const observer = new ResizeObserver(() => {
+					view.fit();
+				});
+				observer.observe(hostEl);
+				return () => {
+					observer.disconnect();
+					for (const tab of store.snapshot().tabs) {
+						const other = store.session(tab.id);
+						if (other !== null) other.onOutput = null;
+					}
+					view.destroy();
+					viewRef.current = null;
+				};
+			}, [endpoint, store]);
+
+			/* Follow the active tab: swap the screen under the same view, and keep
+			 * the keyboard if it was already up. */
+			react.useEffect(() => {
+				const view = viewRef.current;
+				const session = store.session();
+				if (view === null || session === null) return;
+				for (const tab of store.snapshot().tabs) {
+					const other = store.session(tab.id);
+					if (other !== null) other.onOutput = other === session ? () => view.schedule() : null;
+				}
+				view.setScreen(session.screen);
+				view.applyTheme(terminalThemeName());
+				view.fit();
+				view.paintNow();
+				if (view.keyboardOpen() === true) view.requestKeyboard("tab-switch");
+			}, [roster.activeId, endpoint, store]);
+
+			const active = store.session();
+			const status = active === null ? "idle" : active.status;
 			const statusText = status === "ready" ? t("termConnected")
 				: status === "connecting" ? t("termConnecting")
-					: status === "unavailable" ? t("termUnavailable")
-						: status === "exited" || status === "disconnected" ? t("termDisconnected")
-							: status === "error" ? t("failed") : t("termConnecting");
-
-			return h("div", { style: { display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--dsw-alias-bg-base, #fff)" } },
-				h("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "0.5px solid var(--dsw-alias-border-l3, rgba(0,0,0,0.12))", flex: "none" } },
+					: status === "exited" || status === "disconnected" ? t("termDisconnected")
+						: status === "error" ? t("termError") : t("termConnecting");
+			const canReconnect = endpoint !== null && (status === "disconnected" || status === "error");
+			const tap = () => {
+				if (hapticRef.current !== null) hapticRef.current.tap();
+			};
+			return h("div", {
+				style: {
+					display: "flex",
+					flexDirection: "column",
+					height: "100%",
+					minHeight: 0,
+					background: "var(--dsw-alias-bg-base, #fff)"
+				}
+			},
+				h("div", {
+					style: {
+						display: "flex",
+						alignItems: "center",
+						gap: 8,
+						padding: "8px 14px",
+						borderBottom: "0.5px solid var(--dsw-alias-border-l3, rgba(0,0,0,0.12))",
+						flex: "none"
+					}
+				},
 					h("strong", { style: { fontSize: 13 } }, t("termTitle")),
-					h("span", { style: { fontSize: 11, color: "var(--dsw-alias-label-secondary, #666)" } }, endpoint === null ? "" : `${endpoint.url} · ${statusText}`),
+					h("span", {
+						style: {
+							fontSize: 11,
+							color: "var(--dsw-alias-label-secondary, #666)"
+						}
+					}, endpoint === null ? "" : `${endpoint.url} · ${statusText}`),
 					h("span", { style: { flex: 1 } }),
+					canReconnect ? h(Button, {
+						variant: "outline", size: "sm",
+						onClick: () => {
+							tap();
+							const id = store.activeId();
+							if (id !== null) store.close(id);
+							store.openTab();
+						}
+					}, t("termReconnect")) : null,
 					h(Button, {
 						variant: "outline", size: "sm",
 						onClick: () => {
-							if (termRef.current !== null && socketRef.current !== null && socketRef.current.readyState === 1) {
-								termRef.current.clear();
-							}
+							tap();
+							const session = store.session();
+							const view = viewRef.current;
+							if (session === null || view === null) return;
+							session.screen.clearAll();
+							view.schedule();
+							view.scrollToBottom();
 						}
 					}, t("termClear"))
 				),
-				message !== "" ? h("div", { style: { fontSize: 12, padding: "6px 14px", color: "var(--dsw-alias-label-secondary, #666)" } }, message) : null,
+				endpoint === null ? null : h("div", {
+					className: "dsv-tabs",
+					role: "tablist"
+				},
+					roster.tabs.map((tab) => h("div", {
+						key: tab.id,
+						className: "dsv-tab",
+						"data-active": tab.id === roster.activeId ? "true" : "false"
+					},
+						h("button", {
+							type: "button",
+							role: "tab",
+							className: "dsv-tabLabel",
+							"aria-selected": tab.id === roster.activeId,
+							onPointerDown: (event) => event.preventDefault(),
+							onClick: () => {
+								tap();
+								store.activate(tab.id);
+							}
+						},
+							h("span", {
+								className: "dsv-dot",
+								"data-state": tab.status === "ready" ? "ready"
+									: tab.status === "connecting" ? "connecting"
+										: tab.status === "error" || tab.status === "disconnected" ? "error" : "idle",
+								"aria-hidden": "true"
+							}),
+							h("span", { className: "dsv-tabName" }, tab.title)),
+						h("button", {
+							type: "button",
+							className: "dsv-tabClose",
+							"aria-label": t("termCloseTab"),
+							onPointerDown: (event) => event.preventDefault(),
+							onClick: () => {
+								tap();
+								store.close(tab.id);
+							}
+						}, "\u00d7"))),
+					h("button", {
+						type: "button",
+						className: "dsv-tabAdd",
+						"aria-label": t("termNewTab"),
+						"aria-disabled": roster.canOpen ? "false" : "true",
+						onPointerDown: (event) => event.preventDefault(),
+						onClick: () => {
+							tap();
+							if (store.openTab() === null) setMessage(t("termTabLimit", { max: String(TERMINAL_MAX_TABS) }));
+							else setMessage("");
+						}
+					}, "+")),
+				message !== "" ? h("div", {
+					style: {
+						fontSize: 12,
+						padding: "6px 14px",
+						color: "var(--dsw-alias-label-secondary, #666)"
+					}
+				}, message) : null,
 				endpoint === null
 					? h("div", { style: { padding: 16, fontSize: 13 } }, t("termUnavailable"))
-					: h("div", {
-						ref: host,
-						style: { flex: 1, minHeight: 0, padding: 4, overflow: "hidden" }
-					}),
-				endpoint === null ? null : h("div", {
-					style: {
-						display: "flex", alignItems: "center", gap: 6, flex: "none",
-						padding: "6px 8px",
-						borderTop: "0.5px solid var(--dsw-alias-border-l3, rgba(0,0,0,0.12))"
-					}
-				},
-					h("input", {
-						value: draft,
-						placeholder: t("termInputHint"),
-						type: "text",
-						spellCheck: false,
-						autoComplete: "off",
-						autoCorrect: "off",
-						autoCapitalize: "none",
-						enterKeyHint: "send",
-						className: "dsa-input",
-						style: { flex: 1 },
-						onChange: (event) => setDraft(event.target.value),
-						onKeyDown: (event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								sendLine();
-							} else if (event.key === "ArrowUp") {
-								event.preventDefault();
-								recall(1);
-							} else if (event.key === "ArrowDown") {
-								event.preventDefault();
-								recall(-1);
-							}
-						}
-					}),
-					h(Button, { variant: "primary", size: "sm", onClick: () => sendLine() }, t("termSend")),
-					h(Button, { variant: "ghost", size: "sm", onClick: paste }, t("termPaste"))
-				)
+					: h("div", { ref: host, className: "dsa-termHost" })
 			);
 		}
 
@@ -1752,8 +5152,34 @@ window.__ModuleLoader__.load({
 			);
 		}
 
+		/** Shared emulator constants: one core's tables, one screen per session. */
+		const terminalCore = createVtCore();
+		const terminalFlags = terminalCore;
+		const terminalCellWidth = (cp) => terminalCore.cpWidth(cp);
+
 		function apply(ctx) {
 			const t = ctx.locale.bind(NS);
+			/* Terminal sessions live with the plugin, not with the panel. The rail
+			 * button remounts the panel, and a remount must reuse the shell that is
+			 * already running — with the socket in the mount effect, every press
+			 * spawned another PTY in the guest. */
+			let terminalSequence = 0;
+			const terminalStore = createTerminalStore({
+				maxTabs: TERMINAL_MAX_TABS,
+				open: () => {
+					const endpoint = ptyEndpoint();
+					if (endpoint === null) return null;
+					terminalSequence += 1;
+					return openTerminalSession({
+						endpoint,
+						t,
+						sequence: terminalSequence,
+						core: terminalCore,
+						onChange: () => terminalStore.touch()
+					});
+				}
+			});
+			ctx.effect(() => () => terminalStore.closeAll(), "dsh-plugin-android: terminals");
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-plugin-android: dictionaries");
 			// The page draws itself in the shell's vocabulary, so its stylesheet
 			// rides the same effect: mounted with the plugin, removed with it.
@@ -1772,6 +5198,12 @@ window.__ModuleLoader__.load({
 				const observer = installBallStatus();
 				return () => observer.disconnect();
 			}, "dsh-plugin-android: ball status");
+			// The ball's words go to their own conversation, or wait in the app's
+			// queue until there is one.
+			ctx.effect(() => {
+				const inbox = installBallInbox(ctx);
+				return () => inbox.disconnect();
+			}, "dsh-plugin-android: ball inbox");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "android",
@@ -1786,7 +5218,10 @@ window.__ModuleLoader__.load({
 					name: "main",
 					key: TERMINAL_PANEL,
 					locale: NS,
-					inject: () => ({ t })
+					inject: () => ({
+						t,
+						store: terminalStore
+					})
 				}, TerminalPanel);
 			});
 
@@ -1810,7 +5245,11 @@ window.__ModuleLoader__.load({
 		 *  registry. The target slot itself is reached through slots.inject(), so
 		 *  this plugin does not constrain activation order against the settings
 		 *  shell that declares `settings.section`. */
-		const inject = ["slots", "locale"];
+		// "remote.session" is a *dotted* cordis service name (see the session
+		// controller's own inject list); reaching it as ctx.remote.session is not
+		// guaranteed to resolve, and when it did not, every ball message failed
+		// silently and fell back to pasting into the current conversation.
+		const inject = ["slots", "locale", "remote", "remote.session"];
 
 		exports.apply = apply;
 		exports.inject = inject;

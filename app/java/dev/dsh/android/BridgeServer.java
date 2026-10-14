@@ -65,6 +65,16 @@ public final class BridgeServer {
          * bridge only names what is missing.
          */
         void onAssistPermission(int which);
+
+        /**
+         * A light tap under the finger for a Web-UI control (the terminal's key
+         * row). The activity turns this into the platform's own
+         * `HapticFeedbackConstants.KEYBOARD_TAP`, so it follows the user's
+         * touch-feedback setting instead of buzzing unconditionally. Defaulted to
+         * a no-op so an older host implementation still compiles.
+         */
+        default void onHapticTap() {
+        }
     }
 
     private static ServerSocket server;
@@ -211,6 +221,13 @@ public final class BridgeServer {
         switch (path) {
             case "/snapshot":
                 respondJson(out, 200, snapshot());
+                return;
+            case "/haptic":
+                // Fire-and-forget feedback for a Web-UI control: the terminal's key
+                // row sends this on every press and debounces it on the page, so the
+                // answer carries no state and a missed tick is invisible.
+                host.onHapticTap();
+                respondJson(out, 200, ok("已反馈"));
                 return;
             case "/server/start":
                 DshService.ensure(App.i());
@@ -416,6 +433,41 @@ public final class BridgeServer {
                 if (host != null) host.onAssistPermission(Assist.PERMISSION_MICROPHONE);
                 respondJson(out, 200, ok("请允许 DSH 录音"));
                 return;
+            case "/ball/inbox": {
+                // The ball's own conversation. `text` present means "the user just
+                // said this"; absent means "what is still waiting". The plugin
+                // drains it (see installBallInbox) and acks by id.
+                JSONObject answer = new JSONObject();
+                if (request.has("text")) {
+                    answer.put("id", BallInbox.add(request.optString("text", "")));
+                }
+                answer.put("ok", true);
+                answer.put("items", BallInbox.pending());
+                respondJson(out, 200, answer);
+                return;
+            }
+            case "/ball/inbox/ack": {
+                BallInbox.ack(request.optJSONArray("ids"));
+                JSONObject answer = new JSONObject();
+                answer.put("ok", true);
+                answer.put("items", BallInbox.pending());
+                respondJson(out, 200, answer);
+                return;
+            }
+            case "/ball/state": {
+                // The status channel. `phase` present means "this is what I am
+                // doing" (the `ball` CLI, or the page); absent means "tell me what
+                // the ball is showing", which the page polls so its own fallback
+                // stays out of the way.
+                JSONObject answer = new JSONObject();
+                if (request.has("phase")) {
+                    BallService.setState(request.optString("phase", "idle"), request.optString("text", ""));
+                    answer.put("ok", true);
+                }
+                answer.put("state", BallService.stateJson());
+                respondJson(out, 200, answer);
+                return;
+            }
             case "/ball/say": {
                 // Anything with something to report: the page (which tool is
                 // running), a guest script, or the agent itself.

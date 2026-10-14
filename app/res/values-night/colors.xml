@@ -9,15 +9,22 @@
     <color name="console_accent">#FF4C8DFF</color>
     <color name="console_danger">#FFFF6B6B</color>
     <color name="console_ok">#FF6BE07A</color>
-    <!-- 悬浮球与它的输入面板 -->
-    <color name="ball_fill">#FF3B5BFF</color>
-    <color name="ball_stroke">#33FFFFFF</color>
+    <!-- 悬浮球与它的输入面板：夜里把球压得更深，标记仍是白的（见 values/colors.xml） -->
+    <color name="ball_fill">#FF15171A</color>
+    <color name="ball_stroke">#2EFFFFFF</color>
+    <color name="ball_ring">#59FFFFFF</color>
     <color name="panel_fill">#FF1E2128</color>
-    <color name="panel_stroke">#33FFFFFF</color>
+    <color name="panel_stroke">#1FFFFFFF</color>
+    <color name="panel_field">#FF262A31</color>
+    <color name="panel_field_stroke">#1FFFFFFF</color>
     <color name="panel_text">#FFE8EAED</color>
     <color name="panel_hint">#FF9AA0A6</color>
-    <!-- 悬浮球上方的气泡 -->
-    <color name="ball_bubble">#FF2B2F36</color>
-    <color name="ball_bubble_text">#FFFFFFFF</color>
+    <color name="panel_button">#FFE8EAED</color>
+    <color name="panel_button_text">#FF15171A</color>
+    <color name="panel_button_stroke">#33FFFFFF</color>
+    <!-- 悬浮球上方的气泡：深色浮层，文字用主文本色 -->
+    <color name="ball_bubble">#FF26282C</color>
+    <color name="ball_bubble_stroke">#1FFFFFFF</color>
+    <color name="ball_bubble_text">#FFE8EAED</color>
 </resources>
 

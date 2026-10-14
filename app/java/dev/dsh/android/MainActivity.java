@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -143,6 +144,17 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                     } else {
                         Toast.makeText(MainActivity.this, "Shizuku 未运行", Toast.LENGTH_SHORT).show();
                     }
+                });
+            }
+
+            @Override
+            public void onHapticTap() {
+                /* The terminal's key row asks for the keyboard's own tap: it is the
+                 * lightest feedback the platform has, and it is skipped by the
+                 * system when the user turned touch feedback off. */
+                handler.post(() -> {
+                    View decor = getWindow() == null ? null : getWindow().getDecorView();
+                    if (decor != null) decor.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 });
             }
         });

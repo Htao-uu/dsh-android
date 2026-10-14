@@ -66,14 +66,15 @@ if [ -f "$OUT" ] && [ "$OUT" -nt "$SRC" ]; then
   exit 0
 fi
 
-command -v gcc >/dev/null || {
-  echo "linkfix: need gcc to build $OUT (the release paths must not ship a stale or missing shim)" >&2
+CC="${CC:-gcc}"
+command -v "$CC" >/dev/null || {
+  echo "linkfix: need $CC to build $OUT (the release paths must not ship a stale or missing shim)" >&2
   exit 1
 }
 
 # -nostdlib -nostartfiles: nothing from the host libc is linked in, which is what
 # keeps the object loadable inside the guest's glibc.
-gcc -O2 -fPIC -shared -nostdlib -nostartfiles -fno-stack-protector \
+"$CC" -O2 -fPIC -shared -nostdlib -nostartfiles -fno-stack-protector \
   -fno-asynchronous-unwind-tables -Wl,-s -o "$OUT" "$SRC"
 
 verify

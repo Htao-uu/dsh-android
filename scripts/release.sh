@@ -19,6 +19,11 @@ set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 REPO="${DSH_REPO:-itiswdwa/dsh-android}"
+
+# Before anything is bumped or uploaded: two releases running at once would
+# delete each other's assets. See scripts/_release_lock.sh.
+. "$ROOT/scripts/_release_lock.sh"
+
 VERSION="${1:-$(cat "$ROOT/VERSION")}"
 
 if [ "${1:-}" != "" ]; then

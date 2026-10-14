@@ -23,8 +23,10 @@
     <string name="ball_speak">说话</string>
     <string name="ball_send">发送</string>
     <string name="ball_close">收起</string>
+    <string name="ball_done">完成</string>
     <string name="ball_empty">还没输入内容</string>
     <string name="ball_sent">已交给 DSH</string>
+    <string name="ball_to_session">已交给悬浮球会话</string>
     <string name="ball_sending">正在交给 DSH…</string>
     <string name="ball_you">你：</string>
     <string name="ball_copied">没找到输入框，已复制到剪贴板</string>

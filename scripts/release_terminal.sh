@@ -23,6 +23,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="${DSH_REPO:-itiswdwa/dsh-android}"
 API="https://api.github.com/repos/$REPO"
 
+# Take the release mutex before touching ROOTFS_VERSION or the assets; see
+# scripts/_release_lock.sh.
+. "$ROOT/scripts/_release_lock.sh"
+
 VERSION="${1:-$(cat "$ROOT/ROOTFS_VERSION")}"
 if [ "${1:-}" != "" ]; then
   echo "$VERSION" > "$ROOT/ROOTFS_VERSION"

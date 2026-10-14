@@ -14,15 +14,27 @@
     <color name="console_accent">#FF2563EB</color>
     <color name="console_danger">#FFD93025</color>
     <color name="console_ok">#FF188038</color>
-    <!-- 悬浮球与它的输入面板 -->
-    <color name="ball_fill">#FF4C6FFF</color>
-    <color name="ball_stroke">#33FFFFFF</color>
+    <!--
+      悬浮球与它的输入面板：黑白，不要品牌蓝。
+      球体取 harness 的墨色（主文本那一档），球上的标记永远是白的，
+      所以球体在浅色和深色主题里都保持深色 —— 反过来做（夜里白球）会让内置的白色鲸鱼
+      标记消失。气泡与面板按 harness 浮层的画法：面色 + 发丝描边 + 阴影，不用纯黑块。
+    -->
+    <color name="ball_fill">#FF1B1D21</color>
+    <color name="ball_stroke">#24FFFFFF</color>
+    <color name="ball_ring">#66FFFFFF</color>
     <color name="panel_fill">#FFFFFFFF</color>
-    <color name="panel_stroke">#1A000000</color>
+    <color name="panel_stroke">#14000000</color>
+    <color name="panel_field">#FFF4F5F7</color>
+    <color name="panel_field_stroke">#14000000</color>
     <color name="panel_text">#FF1F2329</color>
-    <color name="panel_hint">#FF6B7280</color>
-    <!-- 悬浮球上方的气泡 -->
-    <color name="ball_bubble">#FF2B2F36</color>
-    <color name="ball_bubble_text">#FFFFFFFF</color>
+    <color name="panel_hint">#FF8A9099</color>
+    <color name="panel_button">#FF1B1D21</color>
+    <color name="panel_button_text">#FFFFFFFF</color>
+    <color name="panel_button_stroke">#1A000000</color>
+    <!-- 悬浮球上方的气泡：浅色面 + 发丝描边，文字用墨色 -->
+    <color name="ball_bubble">#FFFFFFFF</color>
+    <color name="ball_bubble_stroke">#14000000</color>
+    <color name="ball_bubble_text">#FF1F2329</color>
 </resources>
 

@@ -82,6 +82,11 @@
         var col = frame() && frame().querySelector('[class*="_sidebarCol"]');
         if (col === null || !col.contains(target)) return;
         if (target.closest('[class*="_sessionRow"]') === null) return;
+        // A control INSIDE the row is not "the row was chosen": the three-dot menu
+        // button lives in the row, and dismissing the drawer on its click tore the
+        // menu's anchor out from under it — the menu flashed and vanished while the
+        // row's own handler happily opened the session. Row body still selects.
+        if (target.closest('button, [role="menuitem"], [aria-haspopup="menu"], [role="menu"]') !== null) return;
         window.setTimeout(function () {
           dismissDrawer();
         }, 0);
