@@ -90,7 +90,11 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * bars with the constant is what made them read as two black edges.
      */
     private String pageBackground = null;
+
+    /** The alpha the page paints its own scrim with (1 = opaque). */
+    private float pageAlpha = 1f;
     private static final String PREF_PAGE_BG = "page_theme_background";
+    private static final String PREF_PAGE_ALPHA = "page_theme_background_alpha";
 
     private FrameLayout root;
     private WebView web;
@@ -163,7 +167,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             }
 
             @Override
-            public void onThemeReported(boolean dark, String background) {
+            public void onThemeReported(boolean dark, String background, float alpha) {
                 // The page is the source of truth for both the palette and the exact
                 // colour; keep them for the next launch too, so the first frame is
                 // never the wrong one (nor the wrong shade of dark).
@@ -171,10 +175,12 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                     android.content.SharedPreferences.Editor editor = App.i().prefs.edit();
                     editor.putBoolean(PREF_PAGE_DARK, dark);
                     if (background != null) editor.putString(PREF_PAGE_BG, background);
+                    editor.putFloat(PREF_PAGE_ALPHA, alpha);
                     editor.apply();
                 } catch (Throwable ignored) {
                 }
                 if (background != null) pageBackground = background;
+                pageAlpha = alpha <= 0f || alpha > 1f ? 1f : alpha;
                 handler.post(() -> applyWindowTheme(dark));
             }
 
@@ -693,7 +699,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         // a black bar, which is exactly the complaint this avoids.)
         boolean translucent = "acrylic".equals(mode);
         boolean blur = translucent && blurAvailable();
-        int alpha = translucent ? scrimAlpha(dark, blur) : 0xFF;
+        // In the acrylic tier the bars copy the page's own scrim (colour *and* alpha), so
+        // the three areas read as one surface; without a report they use the fallback
+        // scrim, which is still a scrim and never a flat black band.
+        int alpha = translucent ? pageScrimAlpha(dark, blur) : 0xFF;
         // Icons follow what the strip actually looks like once the scrim and the
         // wallpaper are composited, not the harness theme alone: a 35% dark scrim over
         // a bright wallpaper is still a bright strip, and dark icons read better there.
@@ -707,7 +716,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             // Translucent background + transparent bars is what lets the wallpaper
             // (blurred, when the ROM blurs) show through the two strips.
             window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
-                    withAlpha(windowColor(dark), alpha)));
+                    withAlpha(pageScrimColor(dark), alpha)));
             window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
             window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
         } else {
@@ -753,8 +762,12 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                         + " windowAlpha=0x" + String.format("%02X", alpha)
                         + " icons=" + (lightIcons ? "light" : "dark")
                         + " wallpaperLum=" + String.format("%.2f", wallpaperLuminance())
-                        + " barColor=" + hex(translucent ? withAlpha(windowColor(dark), alpha) : windowColor(dark))
+                        + " barColor=" + hex(translucent ? withAlpha(pageScrimColor(dark), alpha) : windowColor(dark))
+                        + "@" + Math.round(alpha * 100f / 255f) + "%"
+                        + " pageScrim=" + (pageBackground == null ? "unknown" : pageBackground)
+                        + "@" + Math.round(pageAlpha * 100f) + "%"
                         + " src=" + (colorFromPage() ? "page" : "theme")
+                        + " content=" + (translucent ? "translucent(bars=wallpaper)" : "opaque")
                         + " barArea=" + (translucent ? "wallpaper" : "themeColor")
                         + " mode=" + chromeMode()
                         + " effect=" + (blur ? "acrylic" : translucent ? "translucent" : "solid"));
@@ -799,6 +812,16 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * client has told us, and the theme constant otherwise.
      */
     private int windowColor(boolean dark) {
+        return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+    }
+
+    /**
+     * The colour the page paints its scrim with, for the bars in the acrylic tier.
+     *
+     * Here the page is deliberately see-through, so "the page's colour" means its scrim
+     * layer, not its final appearance; the fallback is the theme constant.
+     */
+    private int pageScrimColor(boolean dark) {
         String bg = pageBackground;
         if (bg == null) {
             try {
@@ -812,7 +835,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             } catch (Throwable ignored) {
             }
         }
-        return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+        return windowColor(dark);
     }
 
     /** True when this colour came from the page rather than from our own constants. */
@@ -928,6 +951,34 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         if (wallpaper < 0) return scrim;
         double weight = alpha / 255.0;
         return weight * scrim + (1 - weight) * wallpaper;
+    }
+
+    /**
+     * The alpha for the bars: the page's own scrim when it has told us, else the fallback.
+     *
+     * Matching this is what makes the top and bottom strips continuous with the middle -
+     * a fixed 35% over the wallpaper is not the same surface the page is painting.
+     */
+    private int pageScrimAlpha(boolean dark, boolean blur) {
+        String bg = pageBackground;
+        if (bg == null) {
+            try {
+                bg = App.i().prefs.getString(PREF_PAGE_BG, null);
+            } catch (Throwable ignored) {
+            }
+        }
+        if (bg != null) {
+            float alpha = pageAlpha;
+            if (alpha <= 0f || alpha > 1f) {
+                try {
+                    alpha = App.i().prefs.getFloat(PREF_PAGE_ALPHA, 1f);
+                } catch (Throwable ignored) {
+                    alpha = 1f;
+                }
+            }
+            return Math.max(0x14, Math.min(0xFF, Math.round(alpha * 255f)));
+        }
+        return scrimAlpha(dark, blur);
     }
 
     private int scrimAlpha(boolean dark, boolean blur) {

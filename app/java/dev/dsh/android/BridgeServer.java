@@ -63,7 +63,7 @@ public final class BridgeServer {
          * follows the *phone's* dark mode - which can disagree with the harness. The
          * page is the only place that knows the harness theme, so it pushes it here.
          */
-        void onThemeReported(boolean dark, String background);
+        void onThemeReported(boolean dark, String background, float alpha);
 
         /** The window-chrome choice changed in the settings page; repaint the window. */
         void onChromeModeChanged();
@@ -244,7 +244,11 @@ public final class BridgeServer {
                 // bars are filled with, so they match the page instead of our guess.
                 String background = request.optString("bg", "");
                 if (!background.matches("^#[0-9a-fA-F]{6}$")) background = null;
-                host.onThemeReported(request.optBoolean("dark", false), background);
+                // `alpha` is how opaque the page paints its own scrim; the bars copy it so
+                // the top, middle and bottom read as one surface.
+                float alpha = (float) request.optDouble("alpha", 1);
+                if (!(alpha > 0) || alpha > 1) alpha = 1f;
+                host.onThemeReported(request.optBoolean("dark", false), background, alpha);
                 respondJson(out, 200, ok("主题已同步"));
                 return;
             case "/haptic":

@@ -4810,7 +4810,16 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 		 * composited onto black or white first, and anything unreadable returns null so
 		 * the app keeps its own fallback.
 		 */
-		function pageBackground() {
+		/**
+		 * The page's own background *scrim*: colour and alpha, as the harness paints it.
+		 *
+		 * The bars have to look like the middle, and the middle is this scrim over the
+		 * blurred wallpaper - so the app paints the bars with the same scrim instead of a
+		 * constant of its own. That constant was darker than the harness scrim, which is
+		 * exactly why the top and bottom strips read as two black bars against a
+		 * see-through page.
+		 */
+		function pageScrim() {
 			const parse = (value) => {
 				const match = /rgba?\(([^)]+)\)/.exec(String(value ?? ""));
 				if (match === null) return null;
@@ -4831,14 +4840,13 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				if (node === null || node === undefined) continue;
 				const colour = parse(getComputedStyle(node).backgroundColor);
 				if (colour === null || colour.a <= 0) continue;
-				if (colour.a >= 1) return hex(colour.r, colour.g, colour.b);
-				// Translucent: composite onto the palette's own extreme, which is what
-				// the browser will have shown through it in the common case.
-				const dark = pageThemeName() === "dark";
-				const base = dark ? 0 : 255;
-				return hex(base + (colour.r - base) * colour.a,
-					base + (colour.g - base) * colour.a,
-					base + (colour.b - base) * colour.a);
+				// Report the scrim as painted, alpha included: the app needs the alpha to
+				// match this layer in the bars.
+				return {
+					bg: hex(colour.r, colour.g, colour.b),
+					alpha: colour.a,
+					opaque: colour.a >= 1
+				};
 			}
 			return null;
 		}
@@ -4868,10 +4876,15 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			function sync() {
 				attachBody();
 				const dark = pageThemeName() === "dark";
-				const bg = pageBackground();
-				const key = dark + "|" + bg;
+				const scrim = pageScrim();
+				const key = dark + "|" + JSON.stringify(scrim);
 				if (key === sent) return;
-				call("/theme", { dark, bg }).then(() => {
+				call("/theme", {
+					dark,
+					bg: scrim === null ? null : scrim.bg,
+					alpha: scrim === null ? 1 : scrim.alpha,
+					opaque: scrim === null ? false : scrim.opaque
+				}).then(() => {
 					sent = key;
 					failures = 0;
 				}).catch(() => {
