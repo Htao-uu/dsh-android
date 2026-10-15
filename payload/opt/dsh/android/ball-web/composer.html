@@ -816,6 +816,8 @@ html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden
     return true;
   };
   window.ComposerUI = {
+    // The app pushes settings through this entry (see BallService.applySettings).
+    settings: window.__dshBallSettings,
     open: open,
     at: at,
     heard: heard,

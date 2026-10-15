@@ -40,6 +40,16 @@ window.__ModuleLoader__.load({
 			ballClear: "恢复默认图片",
 			ballFailed: "操作失败",
 			ballGrant: "去授权",
+			ballStatusRow: "显示状态行",
+			ballStatusRowDesc: "关掉后球上只留鲸鱼和环，不显示文字。",
+			ballThinkRow: "显示「思考中」",
+			ballThinkRowDesc: "关掉后思考时不出现文字（环仍可显示）。",
+			ballRingRow: "显示进度环",
+			ballRingRowDesc: "关掉后不转圈。",
+			ballLinesRow: "气泡最多行数",
+			ballLinesRowDesc: "1–3 行。",
+			ballResetRow: "重置球的位置",
+			ballResetDone: "已重置到默认位置",
 			ballOverlay: "悬浮窗权限（显示在其他应用上层）",
 			ballOverlayOk: "已授予",
 			ballOverlayMissing: "未授予 —— 没有它悬浮球无法显示",
@@ -223,6 +233,16 @@ window.__ModuleLoader__.load({
 			ballClear: "Reset the image",
 			ballFailed: "Failed",
 			ballGrant: "Grant it",
+			ballStatusRow: "Show the status line",
+			ballStatusRowDesc: "Off: only the whale and the ring, no text.",
+			ballThinkRow: "Show \"thinking\"",
+			ballThinkRowDesc: "Off: no text while thinking (the ring can stay).",
+			ballRingRow: "Show the progress ring",
+			ballRingRowDesc: "Off: it does not spin.",
+			ballLinesRow: "Bubble lines",
+			ballLinesRowDesc: "1 to 3 lines.",
+			ballResetRow: "Reset the ball's position",
+			ballResetDone: "Back at the default position",
 			ballOverlay: "Display over other apps",
 			ballOverlayOk: "Granted",
 			ballOverlayMissing: "Not granted - the ball cannot be shown without it",
@@ -701,7 +721,30 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					setState(null);
 				}
 			};
+			// The behaviour switches live in the app's prefs too; one read returns all of
+			// them (flat map), and each write sends only the key that changed.
+			const [prefs, setPrefs] = react.useState(null);
 			const [overlay, setOverlay] = react.useState(null);
+			const saveBall = async (key, value) => {
+				setMessage(t("busy"));
+				try {
+					const payload = {};
+					payload[key] = value;
+					await props.call("/ball/settings", payload);
+					const fresh = await props.call("/ball/settings", undefined);
+					setPrefs(fresh);
+					setMessage(t("saved"));
+				} catch (error) {
+					setMessage(String(error.message ?? error));
+				}
+			};
+			const refreshPrefs = async () => {
+				try {
+					setPrefs(await props.call("/ball/settings", undefined));
+				} catch (error) {
+					setPrefs(null);
+				}
+			};
 			const refreshOverlay = async () => {
 				try {
 					const data = await props.call("/a11y/status", {});
@@ -713,6 +756,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			react.useEffect(() => {
 				refreshState();
 				refreshOverlay();
+				refreshPrefs();
 			}, []);
 			const run = async (label, action) => {
 				setMessage(t("busy"));
@@ -768,6 +812,37 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 							run(t("saved"), () => props.call("/ball/config", { size: value }));
 						}
 					}, value + "dp")))),
+				// The ball's own behaviour. Everything defaults to what the ball already
+				// did, so an existing user sees no change until they touch a row.
+				h(ToggleRow, {
+					title: t("ballStatusRow"),
+					desc: t("ballStatusRowDesc"),
+					checked: prefs === null ? true : prefs.ballShowStatus !== false,
+					onChange: (value) => saveBall("ballShowStatus", value)
+				}),
+				h(ToggleRow, {
+					title: t("ballThinkRow"),
+					desc: t("ballThinkRowDesc"),
+					checked: prefs === null ? true : prefs.ballShowThink !== false,
+					onChange: (value) => saveBall("ballShowThink", value)
+				}),
+				h(ToggleRow, {
+					title: t("ballRingRow"),
+					desc: t("ballRingRowDesc"),
+					checked: prefs === null ? true : prefs.ballShowRing !== false,
+					onChange: (value) => saveBall("ballShowRing", value)
+				}),
+				h(ChoiceRow, {
+					title: t("ballLinesRow"),
+					desc: t("ballLinesRowDesc"),
+					value: String(prefs === null ? 3 : (prefs.ballBubbleLines ?? 3)),
+					options: [1, 2, 3].map((n) => ({ value: String(n), label: String(n) })),
+					onChange: (value) => saveBall("ballBubbleLines", parseInt(value, 10))
+				}),
+				h("div", { className: "dsa-actions" },
+					h(Button, { variant: "outline", size: "sm",
+						onClick: () => run(t("ballResetDone"), () => props.call("/ball/reset-position", {})) },
+						t("ballResetRow"))),
 				h("div", { className: "dsa-actions" },
 					h(Button, { variant: "outline", size: "sm",
 						onClick: () => run(t("busy"), () => props.call("/ball/pick-image", {})) }, t("ballPick")),
