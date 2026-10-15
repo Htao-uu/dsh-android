@@ -767,6 +767,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                         + " pageScrim=" + (pageBackground == null ? "unknown" : pageBackground)
                         + "@" + Math.round(pageAlpha * 100f) + "%"
                         + " src=" + (colorFromPage() ? "page" : "theme")
+                        + " sameColor=" + (hex(translucent
+                                ? withAlpha(pageScrimColor(dark), alpha) : windowColor(dark))
+                                .equalsIgnoreCase(pageBackground == null ? "" : pageBackground))
+                        + " storedMode=" + storedChromeMode()
                         + " content=" + (translucent ? "translucent(bars=wallpaper)" : "opaque")
                         + " barArea=" + (translucent ? "wallpaper" : "themeColor")
                         + " mode=" + chromeMode()
@@ -793,6 +797,9 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         logTier("solid", 0xFF, " r=0 blurEnabled=" + blurAvailable() + " paramsBlur=0"
                 + " windowAlpha=0xFF barColor=" + hex(windowColor(dark))
                 + " src=" + (colorFromPage() ? "page" : "theme")
+                + " sameColor=" + hex(windowColor(dark)).equalsIgnoreCase(
+                        pageBackground == null ? "" : pageBackground)
+                + " storedMode=" + storedChromeMode()
                 + " barArea=themeColor mode=" + chromeMode() + " effect=solid");
     }
 
@@ -812,16 +819,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * client has told us, and the theme constant otherwise.
      */
     private int windowColor(boolean dark) {
-        return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
-    }
-
-    /**
-     * The colour the page paints its scrim with, for the bars in the acrylic tier.
-     *
-     * Here the page is deliberately see-through, so "the page's colour" means its scrim
-     * layer, not its final appearance; the fallback is the theme constant.
-     */
-    private int pageScrimColor(boolean dark) {
+        // The page's own colour first: filling the bars with our constant while the page
+        // paints a slightly lighter dark (#151517 vs #0E0F12 on this device) is exactly
+        // the shade difference that reads as two black edges. The constants are the
+        // fallback for a page that never reported (older plugin, or the bridge down).
         String bg = pageBackground;
         if (bg == null) {
             try {
@@ -835,6 +836,16 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             } catch (Throwable ignored) {
             }
         }
+        return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+    }
+
+    /**
+     * The colour the page paints its scrim with, for the bars in the acrylic tier.
+     *
+     * Here the page is deliberately see-through, so "the page's colour" means its scrim
+     * layer, not its final appearance; the fallback is the theme constant.
+     */
+    private int pageScrimColor(boolean dark) {
         return windowColor(dark);
     }
 
@@ -860,6 +871,15 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
 
     private static int withAlpha(int color, int alpha) {
         return (color & 0x00FFFFFF) | (alpha << 24);
+    }
+
+    /** What is actually in storage, before validation - so a lost choice shows up. */
+    private String storedChromeMode() {
+        try {
+            return String.valueOf(App.i().prefs.getString(PREF_CHROME_MODE, "(unset)"));
+        } catch (Throwable ignored) {
+            return "(unreadable)";
+        }
     }
 
     /** "auto" unless the user picked one of the other two. */
