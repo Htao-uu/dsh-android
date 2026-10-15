@@ -70,6 +70,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * the wallpaper's own brightness fights the icon colour. Readability wins.
      */
     private static final int SCRIM_ALPHA = 0x8C;
+    /** Without real blur the tint has to carry the "frosted" look on its own. */
+    private static final int SCRIM_ALPHA_NO_BLUR = 0x9E;
     private static final int SCRIM_ALPHA_STRONG = 0xB3;
 
     /** Last tier we logged, so the evidence line is written only when it changes. */
@@ -132,6 +134,12 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             } catch (Throwable ignored) {
             }
         }
+        // One-time evidence for "can this device blur at all": the SDK, the ROM's own
+        // property and its setting, and the platform's runtime answer.
+        App.log("window theme: sdk=" + Build.VERSION.SDK_INT
+                + " supportsBackgroundBlur=" + systemProperty("ro.surface_flinger.supports_background_blur")
+                + " backgroundBlurEnable=" + globalSetting("background_blur_enable")
+                + " isCrossWindowBlurEnabled=" + blurAvailable());
         ShizukuBridge.addPermissionListener();
         BridgeServer.start(new BridgeServer.Host() {
             @Override
@@ -657,9 +665,13 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      */
     private void applyWindowChrome(boolean dark) {
         String mode = chromeMode();
-        boolean translucent = !"solid".equals(mode);
-        boolean blur = translucent && blurAvailable();
-        int alpha = translucent ? scrimAlpha(dark) : 0xFF;
+        boolean blur = !"solid".equals(mode) && blurAvailable();
+        // "auto" is acrylic only where the device really blurs; where it does not, it is
+        // the flat theme colour, because translucency *without* blur is what produced
+        // two dark bands over a dark wallpaper - a worse bar than the flat one it
+        // replaced. An explicit "acrylic" keeps the translucent look by request.
+        boolean translucent = blur || "acrylic".equals(mode);
+        int alpha = translucent ? scrimAlpha(dark, blur) : 0xFF;
         Window window = getWindow();
         if (translucent) {
             // Translucent background + transparent bars is what lets the wallpaper
@@ -671,9 +683,24 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         } else {
             applySolidChrome(dark);
         }
+        // Two levers, because a ROM can honour one and drop the other:
+        //   * setBackgroundBlurRadius - the API-31 "background blur" (what acrylic wants)
+        //   * LayoutParams.setBlurBehindRadius + FLAG_BLUR_BEHIND - the older surface
+        // The read-back is logged: if our own params hold the radius but the compositor
+        // layer still reports 0 (dumpsys: `backgroundBlurRadius=0` on the layer named
+        // `dev.dsh.android/...MainActivity#<id>`), the ROM is dropping it, not us.
+        int paramsRadius = 0;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // 0 clears a previous radius; the platform clamps the upper bound itself.
             window.setBackgroundBlurRadius(blur ? BLUR_RADIUS : 0);
+            try {
+                if (blur) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+                WindowManager.LayoutParams attributes = window.getAttributes();
+                attributes.setBlurBehindRadius(blur ? BLUR_RADIUS : 0);
+                window.setAttributes(attributes);
+                paramsRadius = window.getAttributes().getBlurBehindRadius();
+            } catch (Throwable ignored) {
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Android 10+ enforces its own contrast scrim over a light bar (and over
@@ -689,7 +716,14 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         if (web != null) web.setBackgroundColor(opaque);
         if (loading != null) loading.setBackgroundColor(opaque);
         if (setup != null) setup.setBackgroundColor(opaque);
-        logTier(blur ? "acrylic r=" + BLUR_RADIUS : translucent ? "translucent" : "solid", alpha);
+        logTier(blur ? "acrylic" : translucent ? "translucent" : "solid", alpha,
+                " r=" + (blur ? BLUR_RADIUS : 0)
+                        + " blurEnabled=" + blurAvailable()
+                        + " paramsBlur=" + paramsRadius
+                        + " windowAlpha=0x" + String.format("%02X", alpha)
+                        + " barArea=" + (translucent ? "wallpaper" : "themeColor")
+                        + " mode=" + chromeMode()
+                        + " effect=" + (blur ? "acrylic" : translucent ? "translucent" : "solid"));
     }
 
     /** The flat tier: an opaque theme-coloured window and bars. */
@@ -709,19 +743,19 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         if (web != null) web.setBackgroundColor(color);
         if (loading != null) loading.setBackgroundColor(color);
         if (setup != null) setup.setBackgroundColor(color);
-        logTier("solid", 0xFF);
+        logTier("solid", 0xFF, " r=0 blurEnabled=" + blurAvailable() + " paramsBlur=0"
+                + " windowAlpha=0xFF barArea=themeColor mode=" + chromeMode() + " effect=solid");
     }
 
     /**
      * One line per tier change: this is the raw evidence for which path a device took
      * ("acrylic r=64 alpha=0x8C" / "translucent" / "solid").
      */
-    private void logTier(String tier, int alpha) {
-        if (tier.equals(loggedTier)) return;
-        loggedTier = tier;
-        App.log("window theme: " + tier + " alpha=0x" + String.format("%02X", alpha)
-                + (tier.startsWith("translucent") && !blurAvailable()
-                    ? " (blur unavailable on this device)" : ""));
+    private void logTier(String tier, int alpha, String detail) {
+        String line = "window theme: " + tier + " alpha=0x" + String.format("%02X", alpha) + detail;
+        if (line.equals(loggedTier)) return;
+        loggedTier = line;
+        App.log(line);
     }
 
     private int windowColor(boolean dark) {
@@ -740,6 +774,27 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         } catch (Throwable ignored) {
         }
         return "auto";
+    }
+
+    /** A system property, if this ROM still lets an app read it. */
+    private static String systemProperty(String name) {
+        try {
+            Class<?> properties = Class.forName("android.os.SystemProperties");
+            Object value = properties.getMethod("get", String.class).invoke(null, name);
+            return String.valueOf(value);
+        } catch (Throwable ignored) {
+            return "(unreadable)";
+        }
+    }
+
+    /** A global setting (read-only here): the ROM's own blur switch. */
+    private static String globalSetting(String name) {
+        try {
+            return String.valueOf(android.provider.Settings.Global.getInt(
+                    App.i().getContentResolver(), name, -1));
+        } catch (Throwable ignored) {
+            return "(unreadable)";
+        }
     }
 
     /** Does this ROM actually blur behind windows right now? (API 31+, and switchable.) */
@@ -762,20 +817,21 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * Anything unreadable - no colours, no service, a ROM returning nothing - keeps
      * the default, because a plain strip beats an unreadable one.
      */
-    private int scrimAlpha(boolean dark) {
+    private int scrimAlpha(boolean dark, boolean blur) {
+        int base = blur ? SCRIM_ALPHA : SCRIM_ALPHA_NO_BLUR;
         try {
             android.app.WallpaperManager manager = android.app.WallpaperManager.getInstance(this);
             android.app.WallpaperColors colors =
                     manager.getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM);
-            if (colors == null || colors.getPrimaryColor() == null) return SCRIM_ALPHA;
+            if (colors == null || colors.getPrimaryColor() == null) return base;
             int wallpaper = colors.getPrimaryColor().toArgb();
             double luminance = (0.2126 * android.graphics.Color.red(wallpaper)
                     + 0.7152 * android.graphics.Color.green(wallpaper)
                     + 0.0722 * android.graphics.Color.blue(wallpaper)) / 255.0;
             boolean fightsTheIcons = dark ? luminance > 0.5 : luminance < 0.5;
-            return fightsTheIcons ? SCRIM_ALPHA_STRONG : SCRIM_ALPHA;
+            return fightsTheIcons ? Math.max(base, SCRIM_ALPHA_STRONG) : base;
         } catch (Throwable ignored) {
-            return SCRIM_ALPHA;
+            return base;
         }
     }
 
