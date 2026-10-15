@@ -1414,3 +1414,34 @@ android-shizuku-cli exec 'dumpsys window windows | grep -A 12 dev.dsh.android'
 
 _文档结束。如果这一轮又踩到新坑，**回来把它写进 §11 再下班** —— 这个项目的知识全在这份文件里，
 不在任何人的脑子里。_
+
+
+## 附：球的窗口与设置（两个窗各加载谁）
+
+预装后球的 UI 是**两个 window**，改东西前先看清落在哪个文件上（这一步踩过一次）：
+
+| window（`BallService` 常量） | 页面 | 内容 |
+|---|---|---|
+| `dsh-ball-visual`（`WINDOW_VISUAL`，不可点/不可聚焦） | `payload/opt/dsh/android/ball-web/ball.html`（约 2 KB） | **空壳/兼容层** —— 合并后只留 no-op 的 `BallUI`，**不画任何东西**；不要往这里加开关 |
+| `dsh-ball-bar`（`WINDOW_BAR`，可点） | `payload/opt/dsh/android/ball-web/composer.html`（约 43 KB） | **唯一渲染球、环（`#ring`）、气泡（`#bubbleText`）、徽标（`#badge`）与「思考中」** 的窗口；设置项都落在这里 |
+
+**球页面不轮询**（`composer.html` 里没有 `setInterval`/`fetch`）：状态与设置都由 **Java 侧推**。
+`BallService.applySettings()` 用 `barWebView.evaluateJavascript("window.ComposerUI.settings(<json>)")` 推，
+页面里的钩子是 `window.__dshBallSettings(settings)`（入口 `ComposerUI.settings`）。**启动时由 App 推一次**；
+设置页写入后**即时生效**；推送不可用时的兜底是**下次球页面重载生效**。页面每次应用会打一行
+`ball settings applied: status=on think=on ring=on lines=3`。
+
+**`ball*` 键表（都在 App 侧 SharedPreferences；协议是扁平 map，加项不改协议）**
+
+| 键 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `ballEnabled` | bool | `false`（状态位） | **由服务自己写**：UI 开关必须走 `/ball/start` · `/ball/stop`，**绝不直接写 prefs** |
+| `ballSizeDp` | int | `58`（`DEFAULT_SIZE_DP`） | 32–96 之间被服务接受；设置页动态并入当前值 |
+| `ballImagePath` | string | `""` | 自定义图片；空 = 内置鲸鱼 |
+| `ballShowStatus` | bool | `true` | 气泡文字显隐（`body.no-status`） |
+| `ballShowThink` | bool | `true` | 「思考中」文案显隐 |
+| `ballShowRing` | bool | `true` | 进度环显示与转圈（`body.no-ring`） |
+| `ballBubbleLines` | int | `3`（1–3） | 气泡行数，联动 `--lines` 高度（Java 侧上限 `3×20+12`） |
+| `ballX` / `ballY` | int | `dp(12)` / `dp(220)` | **内部维护，不进 UI**；只提供 `POST /ball/reset-position` |
+
+桥：`GET/POST /ball/settings`（无字段=读全部、带字段=按项写并返回完整 settings）、`POST /ball/reset-position`。
