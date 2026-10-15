@@ -40,6 +40,9 @@ window.__ModuleLoader__.load({
 			ballClear: "恢复默认图片",
 			ballFailed: "操作失败",
 			ballGrant: "去授权",
+			ballOverlay: "悬浮窗权限（显示在其他应用上层）",
+			ballOverlayOk: "已授予",
+			ballOverlayMissing: "未授予 —— 没有它悬浮球无法显示",
 			groupRuntime: "运行环境",
 			groupUpdates: "更新与诊断",
 			groupSettings: "设置",
@@ -220,6 +223,9 @@ window.__ModuleLoader__.load({
 			ballClear: "Reset the image",
 			ballFailed: "Failed",
 			ballGrant: "Grant it",
+			ballOverlay: "Display over other apps",
+			ballOverlayOk: "Granted",
+			ballOverlayMissing: "Not granted - the ball cannot be shown without it",
 			groupRuntime: "Runtime",
 			groupUpdates: "Updates and diagnostics",
 			groupSettings: "Settings",
@@ -695,8 +701,18 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					setState(null);
 				}
 			};
+			const [overlay, setOverlay] = react.useState(null);
+			const refreshOverlay = async () => {
+				try {
+					const data = await props.call("/a11y/status", {});
+					setOverlay(data.overlay === true);
+				} catch (error) {
+					setOverlay(null);
+				}
+			};
 			react.useEffect(() => {
 				refreshState();
+				refreshOverlay();
 			}, []);
 			const run = async (label, action) => {
 				setMessage(t("busy"));
@@ -715,6 +731,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					setMessage(String(error.message ?? error));
 				}
 				await refreshState();
+				await refreshOverlay();
 				await props.reload();
 			};
 			return h(Card, null,
@@ -722,6 +739,18 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					h("span", { className: "dsa-strong" }, t("ballTitle")),
 					h("span", { className: "dsa-hint" }, running ? t("ballRunning") : t("ballStopped"))),
 				h("p", { className: "dsa-hint" }, t("ballHint")),
+				// The ball's own permission, in the ball's own section: without it the
+				// ball cannot appear at all, so it belongs next to this switch and not
+				// under some other feature that merely also needs it.
+				h("div", { className: "dsa-row" },
+					h("span", { className: "dsa-title" }, t("ballOverlay")),
+					h("span", { className: "dsa-hint" },
+						overlay === null ? t("busy") : overlay ? t("ballOverlayOk") : t("ballOverlayMissing")),
+					overlay === false
+						? h(Button, { variant: "outline", size: "sm",
+							onClick: () => run(t("busy"), () => props.call("/overlay/request", {})) },
+							t("ballGrant"))
+						: null),
 				h(ToggleRow, {
 					title: t("ballShow"),
 					desc: t("ballShowDesc"),
@@ -2190,10 +2219,14 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			 */
 			const part = props.part ?? "sandbox";
 			const SECTIONS = {
-				// runtime, distros, mounts, settings (with appearance), export
-				sandbox: [0, 1, 3, 4, 7, 10, 6],
-				// the ball's own controls, then the grants its assistant needs
-				ball: [0, 1, 8, 9, 12],
+				// runtime, distros, mounts, settings (with appearance), export, and the
+				// system-level grants: Shizuku (a privileged channel) and the phone
+				// assistant (accessibility). Neither belongs to the ball - the ball just
+				// happens to be able to use them.
+				sandbox: [0, 1, 3, 4, 7, 10, 6, 8, 9],
+				// the ball and *its own* permission, so a ball that cannot start shows
+				// the grant next to the control that failed
+				ball: [0, 1, 12],
 				// version line, update channel, diagnostics log
 				version: [0, 1, 2, 5, 11]
 			};
