@@ -24,7 +24,20 @@ window.__ModuleLoader__.load({
 
 		const NS = "settings.android";
 		const zh = {
-			nav: "安卓沙箱",
+			nav: "沙箱设置",
+			navBall: "悬浮球",
+			navVersion: "版本更新",
+			ballTitle: "悬浮球外观",
+			ballRunning: "运行中",
+			ballStopped: "已关闭",
+			ballHint: "球的设置与原生面板共用同一份数据；关掉后仍可在这里重新打开。",
+			ballShow: "显示悬浮球",
+			ballShowDesc: "关闭后随时可以在这一项重新打开。",
+			ballShown: "悬浮球已开启",
+			ballHidden: "悬浮球已关闭",
+			ballSize: "大小",
+			ballPick: "选择图片",
+			ballClear: "恢复默认图片",
 			groupRuntime: "运行环境",
 			groupUpdates: "更新与诊断",
 			groupSettings: "设置",
@@ -189,7 +202,20 @@ window.__ModuleLoader__.load({
 			apiKeyHint: "以 DEEPSEEK_API_KEY 注入沙箱环境；留空则沿用沙箱里已有的配置。"
 		};
 		const en = {
-			nav: "Android sandbox",
+			nav: "Sandbox",
+			navBall: "Floating ball",
+			navVersion: "Version and updates",
+			ballTitle: "Floating ball appearance",
+			ballRunning: "Running",
+			ballStopped: "Off",
+			ballHint: "The native panel and this page share the same values; switching the ball off can always be undone here.",
+			ballShow: "Show the floating ball",
+			ballShowDesc: "Turn it back on from this same row at any time.",
+			ballShown: "Ball shown",
+			ballHidden: "Ball hidden",
+			ballSize: "Size",
+			ballPick: "Pick an image",
+			ballClear: "Reset the image",
 			groupRuntime: "Runtime",
 			groupUpdates: "Updates and diagnostics",
 			groupSettings: "Settings",
@@ -627,6 +653,65 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					h("span", { className: "dsa-title" }, props.title),
 					props.desc === undefined ? null : h("span", { className: "dsa-hint" }, props.desc)),
 				h(Switch, { checked: props.checked === true, onChange: props.onChange, label: props.title }));
+		}
+
+		/**
+		 * The floating ball's own settings.
+		 *
+		 * These lived only in the native panel, which exposed the *server* toggles rather
+		 * than the ball's; the bridge routes already existed (`/ball/config`,
+		 * `/ball/start`, `/ball/stop`, `/ball/pick-image`), so this is the first UI that
+		 * can change them.
+		 *
+		 * On/off goes through `/ball/start|stop` and never through the preference: the
+		 * service writes `ballEnabled` itself when it starts and stops, so a pref written
+		 * behind its back would be flipped back and the switch would disagree with the
+		 * ball. The native panel stays in place for now - both edit the same keys.
+		 */
+		function BallCard(props) {
+			const t = props.t;
+			const running = props.ball === true;
+			const [size, setSize] = react.useState(null);
+			const [message, setMessage] = react.useState("");
+			const sizes = [48, 58, 68, 78];        // dp; 58 is BallService.DEFAULT_SIZE_DP
+			const run = async (label, action) => {
+				setMessage(t("busy"));
+				try {
+					const data = await action();
+					setMessage(data.message ?? label);
+					await props.reload();
+				} catch (error) {
+					setMessage(String(error.message ?? error));
+				}
+			};
+			return h(Card, null,
+				h("div", { className: "dsa-row" },
+					h("span", { className: "dsa-strong" }, t("ballTitle")),
+					h("span", { className: "dsa-hint" }, running ? t("ballRunning") : t("ballStopped"))),
+				h("p", { className: "dsa-hint" }, t("ballHint")),
+				h(ToggleRow, {
+					title: t("ballShow"),
+					desc: t("ballShowDesc"),
+					checked: running,
+					onChange: (on) => run(on ? t("ballShown") : t("ballHidden"),
+						() => props.call(on ? "/ball/start" : "/ball/stop", {}))
+				}),
+				h("div", { className: "dsa-row" },
+					h("span", { className: "dsa-title" }, t("ballSize")),
+					h("div", { className: "dsa-row" }, sizes.map((value) => h(Button, {
+						key: value,
+						variant: size === value ? "primary" : undefined,
+						onClick: () => {
+							setSize(value);
+							run(t("saved"), () => props.call("/ball/config", { size: value }));
+						}
+					}, value + "dp")))),
+				h("div", { className: "dsa-actions" },
+					h(Button, { variant: "outline", size: "sm",
+						onClick: () => run(t("busy"), () => props.call("/ball/pick-image", {})) }, t("ballPick")),
+					h(Button, { variant: "ghost", size: "sm",
+						onClick: () => run(t("saved"), () => props.call("/ball/config", { image: "" })) }, t("ballClear"))),
+				message === "" ? null : h("p", { className: "dsa-hint" }, message));
 		}
 
 		/**
@@ -2055,6 +2140,25 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			 */
 			const GROUP = (key) => h("h3", { className: "dsa-group" }, t(key));
 
+			/**
+			 * Which of the three a section shows, and what each one contains.
+			 *
+			 * Split by *index* into the rendered children, never by inspecting
+			 * `child.key`: React prefixes keys with ".$", so a key-based filter matches
+			 * nothing and the page renders empty - which is exactly what shipped once.
+			 * The indices are the order of the children below, with the two header lines
+			 * (title, intro) always first.
+			 */
+			const part = props.part ?? "sandbox";
+			const SECTIONS = {
+				// runtime, distros, mounts, settings (with appearance), export
+				sandbox: [0, 1, 3, 4, 7, 10, 6],
+				// the ball's own controls, then the grants its assistant needs
+				ball: [0, 1, 8, 9, 12],
+				// version line, update channel, diagnostics log
+				version: [0, 1, 2, 5, 11]
+			};
+
 			const hotState = (snapshot.hotVersion ?? "") === "" ? t("hotBakedIn") : t("hotImported");
 			const view = h("div", { className: "dsa-root" },
 				h("h2", { key: "head", className: "dsa-heading" }, t("title")),
@@ -2072,7 +2176,6 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					.replace("%s", String(snapshot.hotVersion || snapshot.packagedHotVersion || "-"))
 					.replace("%s", hotState)),
 
-				GROUP("groupRuntime"),
 				h(Group, { key: "status", title: t("status") },
 					h(StatusCard, { status: snapshot.status, t, act, message })),
 
@@ -2096,7 +2199,6 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 						}
 					})))),
 
-				GROUP("groupUpdates"),
 				h(UpdateCard, {
 					key: "updates",
 					t,
@@ -2115,12 +2217,10 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 
 				h(MountsCard, { key: "mounts", t, mounts: snapshot.mounts, onChanged: reload }),
 
-				GROUP("groupAccess"),
 				h(ShizukuCard, { key: "shizuku", shizuku: snapshot.shizuku, t, act }),
 
 				h(PhoneCard, { key: "phone", t, tick, onChanged: reload }),
 
-				GROUP("groupSettings"),
 				h(SettingsCard, { key: "settings", settings: snapshot.settings, t, onSaved: reload }),
 
 				h(Group, { key: "log", title: t("log") },
@@ -2133,8 +2233,12 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 								await reload();
 							}
 						}, t("clear"))),
-					h("pre", { className: "dsa-pre" }, (snapshot.log ?? []).join("\n") || t("logEmpty"))));
-			return view;
+					h("pre", { className: "dsa-pre" }, (snapshot.log ?? []).join("\n") || t("logEmpty"))),
+				h(BallCard, { ball: snapshot.ball, t, call, reload }));
+			if (part === "all") return view;
+			const children = react.Children.toArray(view.props.children);
+			return react.cloneElement(view, null,
+				(SECTIONS[part] ?? SECTIONS.sandbox).map((index) => children[index]));
 		}
 
 		/* ==== @vt-haptic:begin — light tap feedback for the on-screen key row. Tested by test/vt-haptic.test.mjs ==== */
@@ -5396,16 +5500,22 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				const report = installThemeReport();
 				return () => report.disconnect();
 			}, "dsh-plugin-android: window theme");
-			// One entry, titled short: the page itself carries the four headings, so the
-			// settings list stays as short as it was and nothing is truncated.
-			ctx.slots.inject("settings.section", () => ctx.slots.register({
-				name: "settings.section",
-				id: "android",
-				order: 25,
-				label: () => t("nav"),
-				locale: NS,
-				inject: () => ({ t })
-			}, AndroidSection));
+			// Three flat entries, the titles the user asked for. Each one renders its own
+			// slice of the same component - same bridge calls, same state, no filtering.
+			for (const section of [
+				{ id: "android", order: 25, label: "nav", part: "sandbox" },
+				{ id: "android-ball", order: 26, label: "navBall", part: "ball" },
+				{ id: "android-version", order: 27, label: "navVersion", part: "version" }
+			]) {
+				ctx.slots.inject("settings.section", () => ctx.slots.register({
+					name: "settings.section",
+					id: section.id,
+					order: section.order,
+					label: () => t(section.label),
+					locale: NS,
+					inject: () => ({ t, part: section.part })
+				}, AndroidSection));
+			}
 
 			ctx.slots.inject("main", function* () {
 				yield ctx.slots.register({
