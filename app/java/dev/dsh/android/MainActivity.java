@@ -69,10 +69,15 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * Scrim opacity over the wallpaper: 55% is the acrylic default, 70% is used when
      * the wallpaper's own brightness fights the icon colour. Readability wins.
      */
-    private static final int SCRIM_ALPHA = 0x8C;
-    /** Without real blur the tint has to carry the "frosted" look on its own. */
-    private static final int SCRIM_ALPHA_NO_BLUR = 0x9E;
-    private static final int SCRIM_ALPHA_STRONG = 0xB3;
+    /**
+     * Scrim opacity over the wallpaper. Light on purpose: the point of the acrylic
+     * tier is that the wallpaper is still recognisable. 35% with blur, 35% without
+     * (the blur is what sells it), and 45% only where a bright wallpaper would fight
+     * light icons under the dark theme.
+     */
+    private static final int SCRIM_ALPHA = 0x59;
+    private static final int SCRIM_ALPHA_NO_BLUR = 0x59;
+    private static final int SCRIM_ALPHA_BRIGHT_WALLPAPER = 0x73;
 
     /** Last tier we logged, so the evidence line is written only when it changes. */
     private String loggedTier = null;
@@ -665,13 +670,20 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      */
     private void applyWindowChrome(boolean dark) {
         String mode = chromeMode();
-        boolean blur = !"solid".equals(mode) && blurAvailable();
-        // "auto" is acrylic only where the device really blurs; where it does not, it is
-        // the flat theme colour, because translucency *without* blur is what produced
-        // two dark bands over a dark wallpaper - a worse bar than the flat one it
-        // replaced. An explicit "acrylic" keeps the translucent look by request.
-        boolean translucent = blur || "acrylic".equals(mode);
+        // "auto" means the flat theme colour, always. Translucency is nice when the
+        // wallpaper shows through it and a visible band when it does not, and that
+        // depends on the wallpaper, not on the ROM - so the safe default wins and the
+        // wallpaper look is an explicit choice. (Measured on this device: with the
+        // blur actually applied, a 55% dark scrim over a dark wallpaper still read as
+        // a black bar, which is exactly the complaint this avoids.)
+        boolean translucent = "acrylic".equals(mode);
+        boolean blur = translucent && blurAvailable();
         int alpha = translucent ? scrimAlpha(dark, blur) : 0xFF;
+        // Icons follow what the strip actually looks like once the scrim and the
+        // wallpaper are composited, not the harness theme alone: a 35% dark scrim over
+        // a bright wallpaper is still a bright strip, and dark icons read better there.
+        double composite = translucent ? compositeLuminance(dark, alpha) : (dark ? 0.0 : 1.0);
+        boolean lightIcons = composite < 0.5;
         Window window = getWindow();
         if (translucent) {
             // Translucent background + transparent bars is what lets the wallpaper
@@ -708,7 +720,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             window.setNavigationBarContrastEnforced(false);
             window.setStatusBarContrastEnforced(false);
         }
-        setLightSystemBars(!dark);
+        setLightSystemBars(!lightIcons);
         // The content stays opaque: only the strips behind the bars are translucent, so
         // the page never shows the wallpaper through itself.
         int opaque = windowColor(dark);
@@ -721,6 +733,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                         + " blurEnabled=" + blurAvailable()
                         + " paramsBlur=" + paramsRadius
                         + " windowAlpha=0x" + String.format("%02X", alpha)
+                        + " icons=" + (lightIcons ? "light" : "dark")
+                        + " wallpaperLum=" + String.format("%.2f", wallpaperLuminance())
                         + " barArea=" + (translucent ? "wallpaper" : "themeColor")
                         + " mode=" + chromeMode()
                         + " effect=" + (blur ? "acrylic" : translucent ? "translucent" : "solid"));
@@ -789,12 +803,22 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
 
     /** A global setting (read-only here): the ROM's own blur switch. */
     private static String globalSetting(String name) {
-        try {
-            return String.valueOf(android.provider.Settings.Global.getInt(
-                    App.i().getContentResolver(), name, -1));
-        } catch (Throwable ignored) {
-            return "(unreadable)";
+        android.content.ContentResolver resolver = App.i().getContentResolver();
+        // The ROM may keep this in any of the three namespaces; -1 means "not here".
+        for (String namespace : new String[]{"Global", "Secure", "System"}) {
+            try {
+                Object value = "Global".equals(namespace)
+                        ? android.provider.Settings.Global.getInt(resolver, name, -1)
+                        : "Secure".equals(namespace)
+                            ? android.provider.Settings.Secure.getInt(resolver, name, -1)
+                            : android.provider.Settings.System.getInt(resolver, name, -1);
+                if (value instanceof Integer && (Integer) value != -1) {
+                    return namespace.toLowerCase() + "=" + value;
+                }
+            } catch (Throwable ignored) {
+            }
         }
+        return "(not found)";
     }
 
     /** Does this ROM actually blur behind windows right now? (API 31+, and switchable.) */
@@ -817,22 +841,40 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * Anything unreadable - no colours, no service, a ROM returning nothing - keeps
      * the default, because a plain strip beats an unreadable one.
      */
-    private int scrimAlpha(boolean dark, boolean blur) {
-        int base = blur ? SCRIM_ALPHA : SCRIM_ALPHA_NO_BLUR;
+    /**
+     * The wallpaper's own brightness, or -1 when the ROM will not say.
+     *
+     * Used twice: to decide whether a bright wallpaper needs a slightly stronger scrim
+     * under the dark theme, and to work out which way the icons should go.
+     */
+    private double wallpaperLuminance() {
         try {
             android.app.WallpaperManager manager = android.app.WallpaperManager.getInstance(this);
             android.app.WallpaperColors colors =
                     manager.getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM);
-            if (colors == null || colors.getPrimaryColor() == null) return base;
+            if (colors == null || colors.getPrimaryColor() == null) return -1;
             int wallpaper = colors.getPrimaryColor().toArgb();
-            double luminance = (0.2126 * android.graphics.Color.red(wallpaper)
+            return (0.2126 * android.graphics.Color.red(wallpaper)
                     + 0.7152 * android.graphics.Color.green(wallpaper)
                     + 0.0722 * android.graphics.Color.blue(wallpaper)) / 255.0;
-            boolean fightsTheIcons = dark ? luminance > 0.5 : luminance < 0.5;
-            return fightsTheIcons ? Math.max(base, SCRIM_ALPHA_STRONG) : base;
         } catch (Throwable ignored) {
-            return base;
+            return -1;
         }
+    }
+
+    /** What the bar strip ends up looking like: scrim over wallpaper. */
+    private double compositeLuminance(boolean dark, int alpha) {
+        double scrim = (dark ? 0.0 : 1.0);
+        double wallpaper = wallpaperLuminance();
+        if (wallpaper < 0) return scrim;
+        double weight = alpha / 255.0;
+        return weight * scrim + (1 - weight) * wallpaper;
+    }
+
+    private int scrimAlpha(boolean dark, boolean blur) {
+        int base = blur ? SCRIM_ALPHA : SCRIM_ALPHA_NO_BLUR;
+        if (dark && wallpaperLuminance() > 0.5) base = Math.max(base, SCRIM_ALPHA_BRIGHT_WALLPAPER);
+        return base;
     }
 
     /** Light icons on a light bar, dark icons on a dark one. */
