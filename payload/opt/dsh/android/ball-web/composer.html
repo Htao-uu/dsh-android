@@ -81,7 +81,14 @@ html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden
 }
 /* 6 dp above and below the text: a two-line line no longer sits flush against the
    capsule's edges, and the whale (centred, unchanged) keeps its own square. */
-#bubbleText{display:none;flex:0 0 auto;width:max-content;padding:6px 16px;color:var(--ink);
+/* The user's own ball settings, applied by ComposerUI.settings() below. Text height
+   follows the line count instead of the hardcoded 3; nothing here changes display, so
+   the bubble's flex layout is untouched. */
+  body.no-status #bubbleText{display:none!important}
+  body.no-ring #ring{display:none!important}
+  body.no-ring #bar.spinning #ring{display:none!important}
+  #bubbleText{max-height:calc(var(--lines, 3) * 20px)}
+  #bubbleText{display:none;flex:0 0 auto;width:max-content;padding:6px 16px;color:var(--ink);
   font:400 15px/20px var(--font);text-align:center;white-space:normal;word-break:break-word;
   overflow-wrap:anywhere;max-height:100%;overflow:hidden}
 #bar.bubble #bubbleText{display:block}
@@ -792,6 +799,22 @@ html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden
     }, ms(130));
   }
 
+  /** Called by the app (evaluateJavascript) and once at load with the stored values.
+   *  Hot by construction: applying is just reading, so the ball never reloads for it. */
+  window.__dshBallSettings = function (s) {
+    s = s || {};
+    var flag = function (v, d) { return v === undefined || v === null ? d : v === true; };
+    var lines = Math.max(1, Math.min(3, parseInt(s.ballBubbleLines, 10) || 3));
+    var status = flag(s.ballShowStatus, true), think = flag(s.ballShowThink, true), ring = flag(s.ballShowRing, true);
+    document.body.classList.toggle("no-status", !status);
+    document.body.classList.toggle("no-ring", !ring);
+    document.documentElement.style.setProperty("--lines", String(lines));
+    window.__dshBallThink = think;
+    window.__dshBallSettingsApplied = true;
+    console.log("ball settings applied: status=" + (status ? "on" : "off")
+      + " think=" + (think ? "on" : "off") + " ring=" + (ring ? "on" : "off") + " lines=" + lines);
+    return true;
+  };
   window.ComposerUI = {
     open: open,
     at: at,

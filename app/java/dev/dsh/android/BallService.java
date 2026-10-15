@@ -220,6 +220,55 @@ public final class BallService extends Service {
         return running;
     }
 
+    /** Keys for the ball's own display behaviour; defaults are today's behaviour. */
+    /** The bar window's WebView, so the static settings push can reach it. */
+    private static WebView barWebView;
+
+    static final String PREF_SHOW_STATUS = "ballShowStatus";
+    static final String PREF_SHOW_THINK = "ballShowThink";
+    static final String PREF_SHOW_RING = "ballShowRing";
+    static final String PREF_BUBBLE_LINES = "ballBubbleLines";
+
+    /** Push the ball's settings into the bar page. Hot by construction: the page just
+     *  re-reads them, so a change lands while the ball is up. If the page is not up yet
+     *  the next load applies them (that is the documented fallback). */
+    static void applySettings() {
+        WebView target = barWebView;
+        if (target == null) return;
+        String json = settingsJson();
+        target.post(() -> {
+            try {
+                target.evaluateJavascript(
+                        "window.ComposerUI&&window.ComposerUI.settings&&window.ComposerUI.settings(" + json + ")",
+                        null);
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
+    /** The flat map the settings page and the ball page both read. */
+    static String settingsJson() {
+        android.content.SharedPreferences prefs = App.i().prefs;
+        return "{"
+                + "\"ballEnabled\":" + prefs.getBoolean(PREF_ENABLED, false) + ","
+                + "\"ballSizeDp\":" + prefs.getInt(PREF_SIZE, DEFAULT_SIZE_DP) + ","
+                + "\"ballImagePath\":\"" + prefs.getString(PREF_IMAGE, "") + "\","
+                + "\"ballShowStatus\":" + prefs.getBoolean(PREF_SHOW_STATUS, true) + ","
+                + "\"ballShowThink\":" + prefs.getBoolean(PREF_SHOW_THINK, true) + ","
+                + "\"ballShowRing\":" + prefs.getBoolean(PREF_SHOW_RING, true) + ","
+                + "\"ballBubbleLines\":" + prefs.getInt(PREF_BUBBLE_LINES, 3)
+                + "}";
+    }
+
+    /** Put the ball back where it starts when the user never moved it. */
+    static void resetPosition(Context ctx) {
+        App.i().prefs.edit()
+                .remove(PREF_BALL_X)
+                .remove(PREF_BALL_Y)
+                .apply();
+        reload(ctx);
+    }
+
     /** Start the overlay and remember that the user wants it (see {@link #restore}). */
     public static void start(Context ctx) {
         App.i().prefs.edit().putBoolean(PREF_ENABLED, true).apply();
@@ -559,6 +608,7 @@ public final class BallService extends Service {
      */
     private void showBar() {
         bar = webView("composer.html", new Composer(), "DshComposer", true, this::onBarReady);
+        barWebView = bar;
         // The merged page drives the ball too — its gestures arrive as
         // `BallUI.pointer(...)` — so it gets the ball bridge as well.
         bar.addJavascriptInterface(new Bridge(), "DshBall");

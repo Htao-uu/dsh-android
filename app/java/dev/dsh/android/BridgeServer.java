@@ -528,6 +528,39 @@ public final class BridgeServer {
                 respondJson(out, 200, ok("已应用"));
                 return;
             }
+            case "/ball/settings": {
+                // The flat settings map: one read returns everything, and a body writes
+                // only the keys it carries, so adding a key never changes the protocol.
+                android.content.SharedPreferences.Editor edit = App.i().prefs.edit();
+                boolean wrote = false;
+                if (request.has("ballShowStatus")) { edit.putBoolean(BallService.PREF_SHOW_STATUS, request.optBoolean("ballShowStatus", true)); wrote = true; }
+                if (request.has("ballShowThink")) { edit.putBoolean(BallService.PREF_SHOW_THINK, request.optBoolean("ballShowThink", true)); wrote = true; }
+                if (request.has("ballShowRing")) { edit.putBoolean(BallService.PREF_SHOW_RING, request.optBoolean("ballShowRing", true)); wrote = true; }
+                if (request.has("ballBubbleLines")) {
+                    int lines = request.optInt("ballBubbleLines", 3);
+                    edit.putInt(BallService.PREF_BUBBLE_LINES, lines < 1 ? 1 : Math.min(lines, 3));
+                    wrote = true;
+                }
+                if (request.has("ballSizeDp")) {
+                    int size = request.optInt("ballSizeDp", BallService.DEFAULT_SIZE_DP);
+                    edit.putInt(BallService.PREF_SIZE, size < 32 ? 32 : Math.min(size, 96));
+                    wrote = true;
+                }
+                if (request.has("ballImagePath")) { edit.putString(BallService.PREF_IMAGE, request.optString("ballImagePath", "")); wrote = true; }
+                if (wrote) {
+                    edit.apply();
+                    BallService.applySettings();
+                    BallService.reload(App.i());
+                }
+                JSONObject answer = new JSONObject(BallService.settingsJson());
+                answer.put("ok", true);
+                respondJson(out, 200, answer);
+                return;
+            }
+            case "/ball/reset-position":
+                BallService.resetPosition(App.i());
+                respondJson(out, 200, ok("已重置到默认位置"));
+                return;
             case "/ball/pick-image":
                 if (host != null) host.onBallImageRequested();
                 respondJson(out, 200, ok("请选择图片或矢量图 XML"));
