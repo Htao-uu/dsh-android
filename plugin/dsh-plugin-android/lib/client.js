@@ -24,7 +24,10 @@ window.__ModuleLoader__.load({
 
 		const NS = "settings.android";
 		const zh = {
-			nav: "安卓沙箱",
+			nav: "安卓沙箱 · 运行环境",
+			navUpdates: "安卓沙箱 · 更新与诊断",
+			navSettings: "安卓沙箱 · 设置",
+			navAccess: "安卓沙箱 · 权限与助手",
 			title: "安卓沙箱",
 			subtitle: "DeepSeek Harness 运行在手机内的 PRoot 沙箱里，这一页控制那个沙箱。",
 			noBridge: "当前页面没有连到 DSH Android 应用（在电脑浏览器里打开时正常）。请用手机上的 DSH 应用打开本页。",
@@ -185,7 +188,10 @@ window.__ModuleLoader__.load({
 			apiKeyHint: "以 DEEPSEEK_API_KEY 注入沙箱环境；留空则沿用沙箱里已有的配置。"
 		};
 		const en = {
-			nav: "Android sandbox",
+			nav: "Android sandbox · Runtime",
+			navUpdates: "Android sandbox · Updates",
+			navSettings: "Android sandbox · Settings",
+			navAccess: "Android sandbox · Access",
 			title: "Android sandbox",
 			subtitle: "DeepSeek Harness runs inside a PRoot sandbox on this phone; this page controls that sandbox.",
 			noBridge: "This page is not connected to the DSH Android app (expected in a desktop browser). Open it from the DSH app on the phone.",
@@ -2035,13 +2041,32 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				}
 			};
 
+			/**
+			 * Which slice of the page this instance renders.
+			 *
+			 * The section used to be one long column of ten blocks - status, distros,
+			 * updates, export, mounts, Shizuku, phone grants, settings, log - which read
+			 * as a wall. The harness's own settings list is a slot, so the fix is the
+			 * official one: register four sections and show each of them only its own
+			 * blocks. Everything below this line is the same component, the same bridge
+			 * calls and the same state; only the filter differs.
+			 */
+			const part = props.part ?? "all";
+			const BLOCKS = {
+				runtime: ["head", "intro", "meta", "status", "distros", "mounts"],
+				updates: ["head", "intro", "updates", "export", "log"],
+				settings: ["head", "intro", "settings"],
+				access: ["head", "intro", "shizuku", "phone"]
+			};
+
 			const hotState = (snapshot.hotVersion ?? "") === "" ? t("hotBakedIn") : t("hotImported");
-			return h("div", { className: "dsa-root" },
-				h("h2", { className: "dsa-heading" }, t("title")),
-				h("p", { className: "dsa-intro" }, t("subtitle")),
+			const view = h("div", { className: "dsa-root" },
+				h("h2", { key: "head", className: "dsa-heading" }, t("title")),
+				h("p", { key: "intro", className: "dsa-intro" }, t("subtitle")),
 				// Which build is this? Without it, an older plugin on a device is
 				// indistinguishable from a feature that was never written.
 				h("p", {
+					key: "meta",
 					className: "dsa-meta",
 					// The whole version in one string: shell, sandbox runtime, hot
 					// package. This is what a bug report quotes.
@@ -2051,10 +2076,10 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					.replace("%s", String(snapshot.hotVersion || snapshot.packagedHotVersion || "-"))
 					.replace("%s", hotState)),
 
-				h(Group, { title: t("status") },
+				h(Group, { key: "status", title: t("status") },
 					h(StatusCard, { status: snapshot.status, t, act, message })),
 
-				h(Group, { title: t("distros") },
+				h(Group, { key: "distros", title: t("distros") },
 					h("ul", { className: "dsa-list" }, (snapshot.distros ?? []).map((distro) => h(DistroCard, {
 						key: distro.id,
 						distro,
@@ -2075,6 +2100,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					})))),
 
 				h(UpdateCard, {
+					key: "updates",
 					t,
 					app: snapshot.appVersion,
 					terminal: snapshot.terminalVersion,
@@ -2087,17 +2113,17 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					terminalProgress: snapshot.terminalProgress
 				}),
 
-				h(ExportCard, { t }),
+				h(ExportCard, { key: "export", t }),
 
-				h(MountsCard, { t, mounts: snapshot.mounts, onChanged: reload }),
+				h(MountsCard, { key: "mounts", t, mounts: snapshot.mounts, onChanged: reload }),
 
-				h(ShizukuCard, { shizuku: snapshot.shizuku, t, act }),
+				h(ShizukuCard, { key: "shizuku", shizuku: snapshot.shizuku, t, act }),
 
-				h(PhoneCard, { t, tick, onChanged: reload }),
+				h(PhoneCard, { key: "phone", t, tick, onChanged: reload }),
 
-				h(SettingsCard, { settings: snapshot.settings, t, onSaved: reload }),
+				h(SettingsCard, { key: "settings", settings: snapshot.settings, t, onSaved: reload }),
 
-				h(Group, { title: t("log") },
+				h(Group, { key: "log", title: t("log") },
 					h("div", { className: "dsa-actions" },
 						h(Button, { variant: "outline", size: "sm", onClick: reload }, t("refresh")),
 						h(Button, {
@@ -2108,6 +2134,10 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 							}
 						}, t("clear"))),
 					h("pre", { className: "dsa-pre" }, (snapshot.log ?? []).join("\n") || t("logEmpty"))));
+			if (part === "all") return view;
+			const keep = BLOCKS[part] ?? BLOCKS.runtime;
+			return react.cloneElement(view, null,
+				react.Children.toArray(view.props.children).filter((child) => keep.includes(child.key)));
 		}
 
 		/* ==== @vt-haptic:begin — light tap feedback for the on-screen key row. Tested by test/vt-haptic.test.mjs ==== */
@@ -5310,14 +5340,24 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				const report = installThemeReport();
 				return () => report.disconnect();
 			}, "dsh-plugin-android: window theme");
-			ctx.slots.inject("settings.section", () => ctx.slots.register({
-				name: "settings.section",
-				id: "android",
-				order: 25,
-				label: () => t("nav"),
-				locale: NS,
-				inject: () => ({ t })
-			}, AndroidSection));
+			// Four rows, one per area of the sandbox page. The rules the harness already
+			// owns (list order, labels, the panel shell) do the navigation, so an
+			// upstream restyle of the settings list cannot break this.
+			for (const section of [
+				{ id: "android", order: 25, label: "nav", part: "runtime" },
+				{ id: "android-updates", order: 26, label: "navUpdates", part: "updates" },
+				{ id: "android-settings", order: 27, label: "navSettings", part: "settings" },
+				{ id: "android-access", order: 28, label: "navAccess", part: "access" }
+			]) {
+				ctx.slots.inject("settings.section", () => ctx.slots.register({
+					name: "settings.section",
+					id: section.id,
+					order: section.order,
+					label: () => t(section.label),
+					locale: NS,
+					inject: () => ({ t, part: section.part })
+				}, AndroidSection));
+			}
 
 			ctx.slots.inject("main", function* () {
 				yield ctx.slots.register({
