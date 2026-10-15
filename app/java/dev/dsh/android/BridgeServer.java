@@ -532,10 +532,22 @@ public final class BridgeServer {
                 if (host != null) host.onBallImageRequested();
                 respondJson(out, 200, ok("请选择图片或矢量图 XML"));
                 return;
-            case "/ball/start":
-                BallService.start(App.i());
-                respondJson(out, 200, ok(BallService.isRunning() ? "悬浮球已开启" : "需要「显示在其他应用上层」权限"));
+            case "/ball/start": {
+                // `start` hands the work to a foreground service, so asking isRunning()
+                // right here answers "not yet" even on the happy path - which used to be
+                // reported as a missing overlay permission. The permission is the only
+                // thing that can actually refuse the request, so ask that instead, and
+                // treat "still coming up" as the success it is.
+                App app = App.i();
+                boolean allowed = Assist.canOverlay(app);
+                BallService.start(app);
+                JSONObject answer = allowed
+                        ? ok(BallService.isRunning() ? "悬浮球已开启" : "正在开启悬浮球")
+                        : error("需要「显示在其他应用上层」权限，请在「权限与助手」里授予");
+                if (!allowed) answer.put("needsOverlayPermission", true);
+                respondJson(out, 200, answer);
                 return;
+            }
             case "/ball/stop":
                 BallService.stop(App.i());
                 respondJson(out, 200, ok("悬浮球已关闭"));

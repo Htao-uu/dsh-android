@@ -38,6 +38,8 @@ window.__ModuleLoader__.load({
 			ballSize: "大小",
 			ballPick: "选择图片",
 			ballClear: "恢复默认图片",
+			ballFailed: "操作失败",
+			ballGrant: "去授权",
 			groupRuntime: "运行环境",
 			groupUpdates: "更新与诊断",
 			groupSettings: "设置",
@@ -216,6 +218,8 @@ window.__ModuleLoader__.load({
 			ballSize: "Size",
 			ballPick: "Pick an image",
 			ballClear: "Reset the image",
+			ballFailed: "Failed",
+			ballGrant: "Grant it",
 			groupRuntime: "Runtime",
 			groupUpdates: "Updates and diagnostics",
 			groupSettings: "Settings",
@@ -670,19 +674,48 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 		 */
 		function BallCard(props) {
 			const t = props.t;
-			const running = props.ball === true;
+			// The snapshot carries the stored size and image; whether the ball is up is a
+			// runtime fact, so it comes from the state route.
+			const current = props.ball !== null && props.ball !== undefined && props.ball.size
+				? props.ball.size : 58;            // BallService.DEFAULT_SIZE_DP
+			const [state, setState] = react.useState(null);
 			const [size, setSize] = react.useState(null);
 			const [message, setMessage] = react.useState("");
-			const sizes = [48, 58, 68, 78];        // dp; 58 is BallService.DEFAULT_SIZE_DP
+			const [needsPermission, setNeedsPermission] = react.useState(false);
+			const running = state !== null && state.running === true;
+			// The user's own size may be none of the presets (40dp, say). Keep the presets
+			// and fold the current value in, so exactly one choice is always highlighted.
+			const sizes = Array.from(new Set([48, 58, 68, 78, current])).sort((a, b) => a - b);
+			const chosen = size === null ? current : size;
+			const refreshState = async () => {
+				try {
+					const data = await props.call("/ball/state", {});
+					setState(data.state ?? data);
+				} catch (error) {
+					setState(null);
+				}
+			};
+			react.useEffect(() => {
+				refreshState();
+			}, []);
 			const run = async (label, action) => {
 				setMessage(t("busy"));
+				setNeedsPermission(false);
 				try {
 					const data = await action();
-					setMessage(data.message ?? label);
-					await props.reload();
+					// `ok:false` arrives with HTTP 200, so it has to be checked explicitly -
+					// otherwise a refusal would be reported as success.
+					if (data !== null && data !== undefined && data.ok === false) {
+						setNeedsPermission(data.needsOverlayPermission === true);
+						setMessage(data.error ?? t("ballFailed"));
+					} else {
+						setMessage(data !== null && data !== undefined && data.message ? data.message : label);
+					}
 				} catch (error) {
 					setMessage(String(error.message ?? error));
 				}
+				await refreshState();
+				await props.reload();
 			};
 			return h(Card, null,
 				h("div", { className: "dsa-row" },
@@ -700,7 +733,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					h("span", { className: "dsa-title" }, t("ballSize")),
 					h("div", { className: "dsa-row" }, sizes.map((value) => h(Button, {
 						key: value,
-						variant: size === value ? "primary" : undefined,
+						variant: chosen === value ? "primary" : undefined,
 						onClick: () => {
 							setSize(value);
 							run(t("saved"), () => props.call("/ball/config", { size: value }));
@@ -711,7 +744,13 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 						onClick: () => run(t("busy"), () => props.call("/ball/pick-image", {})) }, t("ballPick")),
 					h(Button, { variant: "ghost", size: "sm",
 						onClick: () => run(t("saved"), () => props.call("/ball/config", { image: "" })) }, t("ballClear"))),
-				message === "" ? null : h("p", { className: "dsa-hint" }, message));
+				message === "" ? null : h("p", { className: "dsa-hint" }, message),
+				needsPermission
+					? h("div", { className: "dsa-actions" },
+						h(Button, { variant: "outline", size: "sm",
+							onClick: () => run(t("busy"), () => props.call("/overlay/request", {})) },
+						t("ballGrant")))
+					: null);
 		}
 
 		/**
