@@ -65,6 +65,9 @@ public final class BridgeServer {
          */
         void onThemeReported(boolean dark);
 
+        /** The window-chrome choice changed in the settings page; repaint the window. */
+        void onChromeModeChanged();
+
         /** Open the file picker for the floating ball's picture. */
         void onBallImageRequested();
 
@@ -409,7 +412,13 @@ public final class BridgeServer {
                 if (request.has("shareStorage")) editor.putBoolean("shareStorage", request.optBoolean("shareStorage", true));
                 if (request.has("keepAwake")) editor.putBoolean("keepAwake", request.optBoolean("keepAwake", true));
                 if (request.has("autoRestart")) editor.putBoolean("autoRestart", request.optBoolean("autoRestart", true));
+                if (request.has("chromeMode")) {
+                    String chrome = request.optString("chromeMode", "auto");
+                    editor.putString("window_chrome_mode",
+                            "acrylic".equals(chrome) || "solid".equals(chrome) ? chrome : "auto");
+                }
                 editor.apply();
+                if (request.has("chromeMode")) host.onChromeModeChanged();
                 JSONObject answer = ok("设置已保存");
                 try {
                     if (request.has("port")) answer.put("restartRequired", true);
@@ -616,6 +625,7 @@ public final class BridgeServer {
             settings.put("apiKey", app.prefs.getString("apiKey", ""));
             settings.put("shareStorage", app.prefs.getBoolean("shareStorage", true));
             settings.put("keepAwake", app.prefs.getBoolean("keepAwake", true));
+            settings.put("chromeMode", app.prefs.getString("window_chrome_mode", "auto"));
             settings.put("autoRestart", app.prefs.getBoolean("autoRestart", true));
             root.put("settings", settings);
 

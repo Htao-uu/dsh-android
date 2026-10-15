@@ -81,6 +81,11 @@ window.__ModuleLoader__.load({
 			saveCommand: "保存命令",
 			command: "启动命令",
 			port: "端口",
+			chrome: "状态栏与任务栏",
+			chromeHint: "让上下两条栏透出壁纸：能模糊时是真模糊（亚克力），不支持时退化为半透明，也可以固定用纯色。",
+			chromeAuto: "自动",
+			chromeAcrylic: "亚克力",
+			chromeSolid: "纯色",
 			apiKey: "DeepSeek API Key",
 			share: "共享手机存储到 /sdcard",
 			keepAwake: "后台保活",
@@ -237,6 +242,11 @@ window.__ModuleLoader__.load({
 			saveCommand: "Save command",
 			command: "Start command",
 			port: "Port",
+			chrome: "Status and navigation bars",
+			chromeHint: "Let the bars show the wallpaper: real blur (acrylic) when the device allows it, translucency when it does not, or a flat colour if you prefer.",
+			chromeAuto: "Auto",
+			chromeAcrylic: "Acrylic",
+			chromeSolid: "Solid",
 			apiKey: "DeepSeek API key",
 			share: "Share phone storage at /sdcard",
 			keepAwake: "Keep alive in background",
@@ -608,6 +618,25 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					h("span", { className: "dsa-title" }, props.title),
 					props.desc === undefined ? null : h("span", { className: "dsa-hint" }, props.desc)),
 				h(Switch, { checked: props.checked === true, onChange: props.onChange, label: props.title }));
+		}
+
+		/**
+		 * A three-way choice, in the same shape as ToggleRow.
+		 *
+		 * Window chrome has three states rather than two: the good one depends on what
+		 * the ROM will actually do, and some people just want the flat bar back.
+		 */
+		function ChoiceRow(props) {
+			return h("div", { className: "dsa-toggle" },
+				h("div", { className: "dsa-copy" },
+					h("span", { className: "dsa-title" }, props.title),
+					props.desc === undefined ? null : h("span", { className: "dsa-hint" }, props.desc)),
+				h("div", { className: "dsa-row" },
+					props.options.map((option) => h(Button, {
+						key: option.value,
+						variant: props.value === option.value ? "primary" : undefined,
+						onClick: () => props.onChange(option.value)
+					}, option.label))));
 		}
 
 		function StatusCard(props) {
@@ -1093,6 +1122,17 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 						checked: form.shareStorage === true,
 						onChange: (value) => update("shareStorage", value)
 					}),
+					h(ChoiceRow, {
+						title: t("chrome"),
+						desc: t("chromeHint"),
+						value: form.chromeMode ?? "auto",
+						options: [
+							{ value: "auto", label: t("chromeAuto") },
+							{ value: "acrylic", label: t("chromeAcrylic") },
+							{ value: "solid", label: t("chromeSolid") }
+						],
+						onChange: (value) => update("chromeMode", value)
+					}),
 					h(ToggleRow, {
 						title: t("keepAwake"),
 						checked: form.keepAwake === true,
@@ -1113,7 +1153,8 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 									apiKey: form.apiKey ?? "",
 									shareStorage: form.shareStorage === true,
 									keepAwake: form.keepAwake === true,
-									autoRestart: form.autoRestart === true
+									autoRestart: form.autoRestart === true,
+									chromeMode: form.chromeMode ?? "auto"
 								});
 								if (props.onSaved) await props.onSaved();
 							}

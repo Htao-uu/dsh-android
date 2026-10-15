@@ -59,6 +59,22 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     /** Remembered across restarts, so the first frame is already right. */
     private static final String PREF_PAGE_DARK = "page_theme_dark";
 
+    /** Window chrome: "auto" (blur when the ROM allows it), "acrylic", or "solid". */
+    private static final String PREF_CHROME_MODE = "window_chrome_mode";
+
+    /** Blur radius for the acrylic tier; the platform clamps anything bigger anyway. */
+    private static final int BLUR_RADIUS = 64;
+
+    /**
+     * Scrim opacity over the wallpaper: 55% is the acrylic default, 70% is used when
+     * the wallpaper's own brightness fights the icon colour. Readability wins.
+     */
+    private static final int SCRIM_ALPHA = 0x8C;
+    private static final int SCRIM_ALPHA_STRONG = 0xB3;
+
+    /** Last tier we logged, so the evidence line is written only when it changes. */
+    private String loggedTier = null;
+
     private FrameLayout root;
     private WebView web;
     private Panel panel;
@@ -104,8 +120,25 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         createSetupOverlay();
         applyWindowTheme(preferredDark());
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // The user can turn window blur off in the ROM's settings; the platform
+            // tells us, so the tier follows without a restart (and without a flash).
+            try {
+                WindowManager manager = getSystemService(WindowManager.class);
+                if (manager != null) {
+                    manager.addCrossWindowBlurEnabledListener(enabled ->
+                            handler.post(() -> applyWindowTheme(preferredDark())));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         ShizukuBridge.addPermissionListener();
         BridgeServer.start(new BridgeServer.Host() {
+            @Override
+            public void onChromeModeChanged() {
+                handler.post(() -> applyWindowTheme(preferredDark()));
+            }
+
             @Override
             public void onThemeReported(boolean dark) {
                 // The page is the source of truth for the window's palette; keep it
@@ -601,14 +634,73 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      */
     private void applyWindowTheme(boolean dark) {
         pageDark = dark;
-        int color = getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+        try {
+            applyWindowChrome(dark);
+        } catch (Throwable error) {
+            // Whatever went wrong (a ROM refusing a call, no wallpaper service), the
+            // one thing that must never happen is a white or black strip: fall back to
+            // the flat theme colour, which is what shipped before acrylic existed.
+            App.log("window theme: fell back to solid (" + error + ")");
+            loggedTier = null;
+            applySolidChrome(dark);
+        }
+    }
+
+    /**
+     * Paint the window in the strongest tier this device can actually do.
+     *
+     * The window is full-screen and only its *content* is inset by the bars, so the
+     * bar strips show whatever this method puts behind them. Three tiers, best first:
+     * real blur over the wallpaper ("acrylic"), translucency (wallpaper visible, no
+     * blur), and the flat theme colour. The last is what a device without blur gets,
+     * so no tier here can leave a white or black edge.
+     */
+    private void applyWindowChrome(boolean dark) {
+        String mode = chromeMode();
+        boolean translucent = !"solid".equals(mode);
+        boolean blur = translucent && blurAvailable();
+        int alpha = translucent ? scrimAlpha(dark) : 0xFF;
+        Window window = getWindow();
+        if (translucent) {
+            // Translucent background + transparent bars is what lets the wallpaper
+            // (blurred, when the ROM blurs) show through the two strips.
+            window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+                    withAlpha(windowColor(dark), alpha)));
+            window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
+            window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        } else {
+            applySolidChrome(dark);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // 0 clears a previous radius; the platform clamps the upper bound itself.
+            window.setBackgroundBlurRadius(blur ? BLUR_RADIUS : 0);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ enforces its own contrast scrim over a light bar (and over
+            // the gesture bar); with the colours pinned here it only muddies them.
+            window.setNavigationBarContrastEnforced(false);
+            window.setStatusBarContrastEnforced(false);
+        }
+        setLightSystemBars(!dark);
+        // The content stays opaque: only the strips behind the bars are translucent, so
+        // the page never shows the wallpaper through itself.
+        int opaque = windowColor(dark);
+        if (root != null) root.setBackgroundColor(opaque);
+        if (web != null) web.setBackgroundColor(opaque);
+        if (loading != null) loading.setBackgroundColor(opaque);
+        if (setup != null) setup.setBackgroundColor(opaque);
+        logTier(blur ? "acrylic r=" + BLUR_RADIUS : translucent ? "translucent" : "solid", alpha);
+    }
+
+    /** The flat tier: an opaque theme-coloured window and bars. */
+    private void applySolidChrome(boolean dark) {
+        int color = windowColor(dark);
         Window window = getWindow();
         window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(color));
         window.setStatusBarColor(color);
         window.setNavigationBarColor(color);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(0);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ enforces its own contrast scrim over a light bar (and over
-            // the gesture bar); with the colours pinned here it only muddies them.
             window.setNavigationBarContrastEnforced(false);
             window.setStatusBarContrastEnforced(false);
         }
@@ -617,6 +709,74 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         if (web != null) web.setBackgroundColor(color);
         if (loading != null) loading.setBackgroundColor(color);
         if (setup != null) setup.setBackgroundColor(color);
+        logTier("solid", 0xFF);
+    }
+
+    /**
+     * One line per tier change: this is the raw evidence for which path a device took
+     * ("acrylic r=64 alpha=0x8C" / "translucent" / "solid").
+     */
+    private void logTier(String tier, int alpha) {
+        if (tier.equals(loggedTier)) return;
+        loggedTier = tier;
+        App.log("window theme: " + tier + " alpha=0x" + String.format("%02X", alpha)
+                + (tier.startsWith("translucent") && !blurAvailable()
+                    ? " (blur unavailable on this device)" : ""));
+    }
+
+    private int windowColor(boolean dark) {
+        return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (alpha << 24);
+    }
+
+    /** "auto" unless the user picked one of the other two. */
+    private String chromeMode() {
+        try {
+            String value = App.i().prefs.getString(PREF_CHROME_MODE, "auto");
+            if ("acrylic".equals(value) || "solid".equals(value)) return value;
+        } catch (Throwable ignored) {
+        }
+        return "auto";
+    }
+
+    /** Does this ROM actually blur behind windows right now? (API 31+, and switchable.) */
+    private boolean blurAvailable() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false;
+        try {
+            WindowManager manager = getSystemService(WindowManager.class);
+            return manager != null && manager.isCrossWindowBlurEnabled();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Scrim opacity over the wallpaper.
+     *
+     * The icons follow the harness theme, so the strip has to stay readable on any
+     * wallpaper: when the wallpaper's own brightness fights them (bright wallpaper
+     * under a dark theme, dark wallpaper under a light one) the scrim gets stronger.
+     * Anything unreadable - no colours, no service, a ROM returning nothing - keeps
+     * the default, because a plain strip beats an unreadable one.
+     */
+    private int scrimAlpha(boolean dark) {
+        try {
+            android.app.WallpaperManager manager = android.app.WallpaperManager.getInstance(this);
+            android.app.WallpaperColors colors =
+                    manager.getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM);
+            if (colors == null || colors.getPrimaryColor() == null) return SCRIM_ALPHA;
+            int wallpaper = colors.getPrimaryColor().toArgb();
+            double luminance = (0.2126 * android.graphics.Color.red(wallpaper)
+                    + 0.7152 * android.graphics.Color.green(wallpaper)
+                    + 0.0722 * android.graphics.Color.blue(wallpaper)) / 255.0;
+            boolean fightsTheIcons = dark ? luminance > 0.5 : luminance < 0.5;
+            return fightsTheIcons ? SCRIM_ALPHA_STRONG : SCRIM_ALPHA;
+        } catch (Throwable ignored) {
+            return SCRIM_ALPHA;
+        }
     }
 
     /** Light icons on a light bar, dark icons on a dark one. */
