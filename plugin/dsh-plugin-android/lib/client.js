@@ -24,10 +24,11 @@ window.__ModuleLoader__.load({
 
 		const NS = "settings.android";
 		const zh = {
-			nav: "安卓沙箱 · 运行环境",
-			navUpdates: "安卓沙箱 · 更新与诊断",
-			navSettings: "安卓沙箱 · 设置",
-			navAccess: "安卓沙箱 · 权限与助手",
+			nav: "安卓沙箱",
+			groupRuntime: "运行环境",
+			groupUpdates: "更新与诊断",
+			groupSettings: "设置",
+			groupAccess: "权限与助手",
 			title: "安卓沙箱",
 			subtitle: "DeepSeek Harness 运行在手机内的 PRoot 沙箱里，这一页控制那个沙箱。",
 			noBridge: "当前页面没有连到 DSH Android 应用（在电脑浏览器里打开时正常）。请用手机上的 DSH 应用打开本页。",
@@ -188,10 +189,11 @@ window.__ModuleLoader__.load({
 			apiKeyHint: "以 DEEPSEEK_API_KEY 注入沙箱环境；留空则沿用沙箱里已有的配置。"
 		};
 		const en = {
-			nav: "Android sandbox · Runtime",
-			navUpdates: "Android sandbox · Updates",
-			navSettings: "Android sandbox · Settings",
-			navAccess: "Android sandbox · Access",
+			nav: "Android sandbox",
+			groupRuntime: "Runtime",
+			groupUpdates: "Updates and diagnostics",
+			groupSettings: "Settings",
+			groupAccess: "Access and assistants",
 			title: "Android sandbox",
 			subtitle: "DeepSeek Harness runs inside a PRoot sandbox on this phone; this page controls that sandbox.",
 			noBridge: "This page is not connected to the DSH Android app (expected in a desktop browser). Open it from the DSH app on the phone.",
@@ -438,6 +440,7 @@ window.__ModuleLoader__.load({
 		const PAGE_CSS = `
 .dsa-root{display:flex;flex-direction:column;gap:14px;width:100%;max-width:760px;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px}
 .dsa-root *{box-sizing:border-box}
+.dsa-group{margin:18px 0 6px;font-size:13px;font-weight:600;opacity:.72;letter-spacing:.02em}
 .dsa-heading{margin:0;font-size:18px;font-weight:600;line-height:26px}
 .dsa-intro{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary)}
 .dsa-meta{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere}
@@ -2042,22 +2045,15 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			};
 
 			/**
-			 * Which slice of the page this instance renders.
+			 * Group headings, so one page reads as four short sections.
 			 *
-			 * The section used to be one long column of ten blocks - status, distros,
-			 * updates, export, mounts, Shizuku, phone grants, settings, log - which read
-			 * as a wall. The harness's own settings list is a slot, so the fix is the
-			 * official one: register four sections and show each of them only its own
-			 * blocks. Everything below this line is the same component, the same bridge
-			 * calls and the same state; only the filter differs.
+			 * This was a single ten-block column (too crowded), then four top-level
+			 * settings entries (truncated titles, and the filtering behind them matched
+			 * nothing because React prefixes `child.key` with ".$" - an empty page). One
+			 * entry, four headings, everything always rendered: the harness owns the
+			 * navigation, and nothing can fall through a filter.
 			 */
-			const part = props.part ?? "all";
-			const BLOCKS = {
-				runtime: ["head", "intro", "meta", "status", "distros", "mounts"],
-				updates: ["head", "intro", "updates", "export", "log"],
-				settings: ["head", "intro", "settings"],
-				access: ["head", "intro", "shizuku", "phone"]
-			};
+			const GROUP = (key) => h("h3", { className: "dsa-group" }, t(key));
 
 			const hotState = (snapshot.hotVersion ?? "") === "" ? t("hotBakedIn") : t("hotImported");
 			const view = h("div", { className: "dsa-root" },
@@ -2076,6 +2072,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 					.replace("%s", String(snapshot.hotVersion || snapshot.packagedHotVersion || "-"))
 					.replace("%s", hotState)),
 
+				GROUP("groupRuntime"),
 				h(Group, { key: "status", title: t("status") },
 					h(StatusCard, { status: snapshot.status, t, act, message })),
 
@@ -2099,6 +2096,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 						}
 					})))),
 
+				GROUP("groupUpdates"),
 				h(UpdateCard, {
 					key: "updates",
 					t,
@@ -2117,10 +2115,12 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 
 				h(MountsCard, { key: "mounts", t, mounts: snapshot.mounts, onChanged: reload }),
 
+				GROUP("groupAccess"),
 				h(ShizukuCard, { key: "shizuku", shizuku: snapshot.shizuku, t, act }),
 
 				h(PhoneCard, { key: "phone", t, tick, onChanged: reload }),
 
+				GROUP("groupSettings"),
 				h(SettingsCard, { key: "settings", settings: snapshot.settings, t, onSaved: reload }),
 
 				h(Group, { key: "log", title: t("log") },
@@ -2134,10 +2134,7 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 							}
 						}, t("clear"))),
 					h("pre", { className: "dsa-pre" }, (snapshot.log ?? []).join("\n") || t("logEmpty"))));
-			if (part === "all") return view;
-			const keep = BLOCKS[part] ?? BLOCKS.runtime;
-			return react.cloneElement(view, null,
-				react.Children.toArray(view.props.children).filter((child) => keep.includes(child.key)));
+			return view;
 		}
 
 		/* ==== @vt-haptic:begin — light tap feedback for the on-screen key row. Tested by test/vt-haptic.test.mjs ==== */
@@ -5399,24 +5396,16 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 				const report = installThemeReport();
 				return () => report.disconnect();
 			}, "dsh-plugin-android: window theme");
-			// Four rows, one per area of the sandbox page. The rules the harness already
-			// owns (list order, labels, the panel shell) do the navigation, so an
-			// upstream restyle of the settings list cannot break this.
-			for (const section of [
-				{ id: "android", order: 25, label: "nav", part: "runtime" },
-				{ id: "android-updates", order: 26, label: "navUpdates", part: "updates" },
-				{ id: "android-settings", order: 27, label: "navSettings", part: "settings" },
-				{ id: "android-access", order: 28, label: "navAccess", part: "access" }
-			]) {
-				ctx.slots.inject("settings.section", () => ctx.slots.register({
-					name: "settings.section",
-					id: section.id,
-					order: section.order,
-					label: () => t(section.label),
-					locale: NS,
-					inject: () => ({ t, part: section.part })
-				}, AndroidSection));
-			}
+			// One entry, titled short: the page itself carries the four headings, so the
+			// settings list stays as short as it was and nothing is truncated.
+			ctx.slots.inject("settings.section", () => ctx.slots.register({
+				name: "settings.section",
+				id: "android",
+				order: 25,
+				label: () => t("nav"),
+				locale: NS,
+				inject: () => ({ t })
+			}, AndroidSection));
 
 			ctx.slots.inject("main", function* () {
 				yield ctx.slots.register({
