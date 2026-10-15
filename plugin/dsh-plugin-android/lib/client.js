@@ -4800,6 +4800,50 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 		}
 
 		/**
+		 * The page's own background colour, as `#rrggbb`, or null.
+		 *
+		 * The app cannot see the DOM, so its bars were filled with a *guess* at the
+		 * harness palette (a hardcoded #0E0F12 for dark). The page's real dark is a
+		 * little lighter than that, which is exactly why the bars read as two black
+		 * edges against the page. Take the first ancestor that actually paints an
+		 * opaque background and hand the app that colour; a translucent one is
+		 * composited onto black or white first, and anything unreadable returns null so
+		 * the app keeps its own fallback.
+		 */
+		function pageBackground() {
+			const parse = (value) => {
+				const match = /rgba?\(([^)]+)\)/.exec(String(value ?? ""));
+				if (match === null) return null;
+				const parts = match[1].split(",").map((part) => parseFloat(part.trim()));
+				if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) return null;
+				return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+			};
+			const hex = (r, g, b) => "#" + [r, g, b]
+				.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"))
+				.join("");
+			const candidates = [
+				document.body,
+				document.querySelector("#root"),
+				document.querySelector(".ds-root"),
+				document.documentElement
+			];
+			for (const node of candidates) {
+				if (node === null || node === undefined) continue;
+				const colour = parse(getComputedStyle(node).backgroundColor);
+				if (colour === null || colour.a <= 0) continue;
+				if (colour.a >= 1) return hex(colour.r, colour.g, colour.b);
+				// Translucent: composite onto the palette's own extreme, which is what
+				// the browser will have shown through it in the common case.
+				const dark = pageThemeName() === "dark";
+				const base = dark ? 0 : 255;
+				return hex(base + (colour.r - base) * colour.a,
+					base + (colour.g - base) * colour.a,
+					base + (colour.b - base) * colour.a);
+			}
+			return null;
+		}
+
+		/**
 		 * Tell the app which palette the page is painting.
 		 *
 		 * The status and navigation bars are Android's, not the page's, and the app's
@@ -4824,9 +4868,11 @@ html[data-ds-dark-theme] .dsa-root{--dsa-ball-fill:#3B5BFF}
 			function sync() {
 				attachBody();
 				const dark = pageThemeName() === "dark";
-				if (dark === sent) return;
-				call("/theme", { dark }).then(() => {
-					sent = dark;
+				const bg = pageBackground();
+				const key = dark + "|" + bg;
+				if (key === sent) return;
+				call("/theme", { dark, bg }).then(() => {
+					sent = key;
 					failures = 0;
 				}).catch(() => {
 					// The bridge may not be injected yet; an older app has no

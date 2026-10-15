@@ -82,6 +82,16 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     /** Last tier we logged, so the evidence line is written only when it changes. */
     private String loggedTier = null;
 
+    /**
+     * The page's own background colour, reported by the client as `#rrggbb`.
+     *
+     * The bars have to match what the page actually paints, not our guess at it: the
+     * harness dark is a touch lighter than the app's own dark constant, and filling the
+     * bars with the constant is what made them read as two black edges.
+     */
+    private String pageBackground = null;
+    private static final String PREF_PAGE_BG = "page_theme_background";
+
     private FrameLayout root;
     private WebView web;
     private Panel panel;
@@ -153,13 +163,18 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             }
 
             @Override
-            public void onThemeReported(boolean dark) {
-                // The page is the source of truth for the window's palette; keep it
-                // for the next launch too, so the first frame is never the wrong one.
+            public void onThemeReported(boolean dark, String background) {
+                // The page is the source of truth for both the palette and the exact
+                // colour; keep them for the next launch too, so the first frame is
+                // never the wrong one (nor the wrong shade of dark).
                 try {
-                    App.i().prefs.edit().putBoolean(PREF_PAGE_DARK, dark).apply();
+                    android.content.SharedPreferences.Editor editor = App.i().prefs.edit();
+                    editor.putBoolean(PREF_PAGE_DARK, dark);
+                    if (background != null) editor.putString(PREF_PAGE_BG, background);
+                    editor.apply();
                 } catch (Throwable ignored) {
                 }
+                if (background != null) pageBackground = background;
                 handler.post(() -> applyWindowTheme(dark));
             }
 
@@ -682,7 +697,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         // Icons follow what the strip actually looks like once the scrim and the
         // wallpaper are composited, not the harness theme alone: a 35% dark scrim over
         // a bright wallpaper is still a bright strip, and dark icons read better there.
-        double composite = translucent ? compositeLuminance(dark, alpha) : (dark ? 0.0 : 1.0);
+        // Which way the icons go is decided by the colour the bars actually end up with -
+        // the page's own background in the flat tier, the scrim over the wallpaper in the
+        // acrylic one - so a lighter-than-expected page never gets dark icons.
+        double composite = translucent ? compositeLuminance(dark, alpha) : luminance(windowColor(dark));
         boolean lightIcons = composite < 0.5;
         Window window = getWindow();
         if (translucent) {
@@ -735,6 +753,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                         + " windowAlpha=0x" + String.format("%02X", alpha)
                         + " icons=" + (lightIcons ? "light" : "dark")
                         + " wallpaperLum=" + String.format("%.2f", wallpaperLuminance())
+                        + " barColor=" + hex(translucent ? withAlpha(windowColor(dark), alpha) : windowColor(dark))
+                        + " src=" + (colorFromPage() ? "page" : "theme")
                         + " barArea=" + (translucent ? "wallpaper" : "themeColor")
                         + " mode=" + chromeMode()
                         + " effect=" + (blur ? "acrylic" : translucent ? "translucent" : "solid"));
@@ -758,7 +778,9 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         if (loading != null) loading.setBackgroundColor(color);
         if (setup != null) setup.setBackgroundColor(color);
         logTier("solid", 0xFF, " r=0 blurEnabled=" + blurAvailable() + " paramsBlur=0"
-                + " windowAlpha=0xFF barArea=themeColor mode=" + chromeMode() + " effect=solid");
+                + " windowAlpha=0xFF barColor=" + hex(windowColor(dark))
+                + " src=" + (colorFromPage() ? "page" : "theme")
+                + " barArea=themeColor mode=" + chromeMode() + " effect=solid");
     }
 
     /**
@@ -772,8 +794,45 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         App.log(line);
     }
 
+    /**
+     * The colour the bars and the window background should be: the page's own, when the
+     * client has told us, and the theme constant otherwise.
+     */
     private int windowColor(boolean dark) {
+        String bg = pageBackground;
+        if (bg == null) {
+            try {
+                bg = App.i().prefs.getString(PREF_PAGE_BG, null);
+            } catch (Throwable ignored) {
+            }
+        }
+        if (bg != null) {
+            try {
+                return android.graphics.Color.parseColor(bg) | 0xFF000000;
+            } catch (Throwable ignored) {
+            }
+        }
         return getResources().getColor(dark ? R.color.window_dark : R.color.window_light);
+    }
+
+    /** True when this colour came from the page rather than from our own constants. */
+    private boolean colorFromPage() {
+        if (pageBackground != null) return true;
+        try {
+            return App.i().prefs.getString(PREF_PAGE_BG, null) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static double luminance(int color) {
+        return (0.2126 * android.graphics.Color.red(color)
+                + 0.7152 * android.graphics.Color.green(color)
+                + 0.0722 * android.graphics.Color.blue(color)) / 255.0;
+    }
+
+    private static String hex(int color) {
+        return String.format("#%06X", color & 0xFFFFFF);
     }
 
     private static int withAlpha(int color, int alpha) {
