@@ -141,6 +141,15 @@ if [ -n "$SUDO" ]; then
   $SUDO chown -R "$(id -u):$(id -g)" "$ROOTFS" 2>/dev/null || true
 fi
 
+# apt 在 rootfs 里留下两坨纯构建垃圾，不清就会原样进载荷：
+#   /var/cache/apt/archives  装 guest 工具时下载的 .deb（~120 MB）
+#   /var/lib/apt/lists       索引文件（几十 MB）
+# 第 8 次 CI 的载荷 398 MB / 全量 APK 389 MiB 就是这么来的（t2 只有 186 MiB）。
+# partial 目录按 apt 的习惯留 0700；载荷 zip 只存模式，属主由 App 解包时决定。
+rm -rf "$ROOTFS/var/cache/apt/archives" "$ROOTFS/var/lib/apt/lists"
+mkdir -p "$ROOTFS/var/cache/apt/archives/partial" "$ROOTFS/var/lib/apt/lists/partial"
+chmod 700 "$ROOTFS/var/cache/apt/archives/partial" "$ROOTFS/var/lib/apt/lists/partial"
+
 for tool in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
   if [ ! -e "$ROOTFS/$tool" ]; then
     echo "error: 载荷缺 $tool —— guest 工具没装上（apt 那步失败？）" >&2
