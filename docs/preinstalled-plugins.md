@@ -76,6 +76,9 @@ _Install only plugins you trust: they run with your permissions and can damage D
 - **把 App 的 Node 升到 24.x 之前，必须先跑一次“启用市场 + 一次真实模型调用”的验证。**
   仓库里有现成脚本：`sh scripts/smoke-market-llm.sh`（约 10 秒；对照组与实验组各一次真实调用，失败即退出码非 0）。
 - **把 DSH 升到 0.2.x 之前也要跑同一脚本**（报告环境正是 0.2.0-rc.2 + Node 24）。
+- **2026-10-16 补充实测：`Node 22.23.2` + `DSH 0.2.0-rc.2` 这一组合通过了同一条冒烟脚本**
+  （在隔离副本上做的升级彩排，见 [UPGRADE-DSH.md](UPGRADE-DSH.md)），所以报告里的差异确实指向
+  Node 大版本而不是 DSH 版本。`scripts/upgrade-dsh.sh` 已经把这条冒烟写成升级门禁：不通过就回滚。
 
 **② 万一出现模型/网络异常，先按官方规避处理。**
 
