@@ -41,12 +41,13 @@ sh scripts/build_apk.sh            # → out/dsh-android.apk
   npm i --os=linux --cpu=arm64 --libc=glibc @deepseek-ai/dsh
   ```
 
-  **guest 工具这一步只能在 arm64 主机上跑**：rootfs 里是 arm64 二进制，而 PRoot 只翻译系统调用
-  和路径、**不模拟指令集**。脚本会先看 `uname -m`，不是 aarch64 就跳过安装并说明原因；
-  随后**逐个校验** git/curl/python3/tmux/sshd 是否真的在，缺一个就直接失败 ——
-  因为载荷缺 `sshd` 的表现是「恢复模式起不来」，而不是构建报错（这一步以前是手工做的，
-  仓库脚本里没有，所以照脚本从头构建出来的载荷正好缺它）。
-  x86_64 上要构建载荷，得先挂 `qemu-aarch64-static` + binfmt。
+  **guest 工具这一步要能执行 rootfs 里的 arm64 二进制**（PRoot 只翻译系统调用和路径、**不模拟指令集**）。
+  脚本按三条路选：① `chroot`（沙箱里 fake-root、CI 上 `sudo chroot` + binfmt 都行，首选）；
+  ② `PROOT_CLI=<可执行的 proot>`；③ 都不行就**不装**，然后**硬校验** git/curl/python3/tmux/sshd，
+  缺一个就构建失败 —— 因为载荷缺 `sshd` 的表现是「恢复模式起不来」，而不是构建报错
+  （这一步以前是**手工**做的，仓库脚本里没有，所以照脚本从头构建出来的载荷正好缺它）。
+  两个常见拦路虎：`build/proot/libproot.so` 是给 Android 用的 bionic 二进制（**不能**当 proot CLI 用）；
+  仓库放在 `/sdcard` 这类 FUSE 挂载上时**文件没有可执行位**，构建必须落在 app 私有存储。
 
   harness 版本写在脚本里（`DSH_VERSION` 可覆盖），当前是 **`0.2.0-rc.2`**（npm 上的 `latest`）。
 - `assemble_payload.sh`：把 `payload/` 覆盖到 rootfs、装插件、播种 profile（`/opt/dsh/dsh-home-seed`）、

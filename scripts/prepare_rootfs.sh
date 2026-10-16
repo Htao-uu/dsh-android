@@ -53,33 +53,48 @@ rm -rf "$ROOTFS/usr/local/include"
 echo "== guest tools =="
 GUEST_PACKAGES="git curl ca-certificates python3 tmux htop openssh-server iproute2 less vim-tiny procps"
 # PRoot 只翻译系统调用和路径，**不模拟指令集**：rootfs 里是 arm64 二进制。
-# 所以这步要么跑在 arm64 主机上（本机/手机），要么主机挂了 binfmt + qemu-aarch64-static
-# （x86_64 的 CI runner：`docker/setup-qemu-action` 或 apt 装 qemu-user-static 并注册）。
-# 判断依据是"能不能真的执行"，也就是 binfmt 有没有注册，而不是只看 uname。
+# 三条路，按"能不能真的执行 rootfs 里的东西"来选，都不行就交给下面的硬校验去失败：
+#
+#   1) chroot —— 沙箱里（fake-root）和 CI 上（sudo chroot + binfmt）都能用，首选
+#   2) proot CLI —— 需要一个**能在本机执行**的 proot；注意仓库里那份
+#      build/proot/libproot.so 是给 Android 用的 bionic 二进制（App 当 native library 打包），
+#      在这里执行会 "required file not found"，所以默认不用它，要用就设 PROOT_CLI=<路径>
+#   3) 都不行 —— 不装，让校验失败并打印手工命令
+#
+# 另外：仓库若放在 /sdcard 这类 FUSE 挂载上，文件**没有可执行位**（chmod 也改不了），
+# 构建必须落在 app 私有存储 —— 否则上面两条路都不会成立。
 HOST_ARCH=$(uname -m)
-can_run_target() {
-  [ -r /proc/sys/fs/binfmt_misc/qemu-aarch64 ] && return 0
-  case "$HOST_ARCH" in aarch64|arm64) return 0 ;; esac
-  return 1
-}
-if [ -x "$ROOT/build/proot/libproot.so" ] && can_run_target; then
-  echo "   apt-get install（在 rootfs 里，经 proot）"
-  PROOT_TMP_DIR="${TMPDIR:-/tmp}/proot-build" \
-  "$ROOT/build/proot/libproot.so" -0 -r "$ROOTFS" \
-    -b /dev -b /proc -b /sys -b /etc/resolv.conf \
-    -w /root /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+GUEST_MISSING=""
+for t in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
+  [ -e "$ROOTFS/$t" ] || GUEST_MISSING="$GUEST_MISSING $(basename "$t")"
+done
+GUEST_PACKAGES="git curl ca-certificates python3 tmux htop openssh-server iproute2 less vim-tiny procps"
+APT_CMD="apt-get update -qq && apt-get install -y --no-install-recommends $GUEST_PACKAGES"
+PROOT_CLI="${PROOT_CLI:-}"
+
+if [ -z "$GUEST_MISSING" ]; then
+  echo "   已经都在（git/curl/python3/tmux/sshd），跳过安装"
+elif chroot "$ROOTFS" /bin/true 2>/dev/null; then
+  echo "   经 chroot 安装：$GUEST_PACKAGES"
+  [ -s "$ROOTFS/etc/resolv.conf" ] || cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
+  chroot "$ROOTFS" /usr/bin/env -i \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    DEBIAN_FRONTEND=noninteractive HOME=/root \
+    /bin/sh -c "$APT_CMD" 2>&1 | tail -5 || echo "   ! apt 失败（下面按结果判断）"
+elif [ -n "$PROOT_CLI" ] && [ -x "$PROOT_CLI" ]; then
+  echo "   经 proot 安装（$PROOT_CLI）：$GUEST_PACKAGES"
+  PROOT_TMP_DIR="${TMPDIR:-/tmp}/proot-build" "$PROOT_CLI" -0 -r "$ROOTFS" \
+    -b /dev -b /proc -b /sys -b /etc/resolv.conf -w /root \
+    /usr/bin/env -i \
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
       DEBIAN_FRONTEND=noninteractive HOME=/root \
-      apt-get update -qq \; apt-get install -y --no-install-recommends $GUEST_PACKAGES \
-    2>&1 | tail -5 || echo "   ! apt 这一步失败了（下面按结果判断）"
+      /bin/sh -c "$APT_CMD" 2>&1 | tail -5 || echo "   ! apt 失败（下面按结果判断）"
 else
-  if [ ! -x "$ROOT/build/proot/libproot.so" ]; then
-    echo "   ! 没有 build/proot/libproot.so（先跑 sh scripts/fetch-proot.sh）"
-  else
-    echo "   ! 主机是 $HOST_ARCH 且没有注册 binfmt，跑不了 rootfs 里的 arm64 apt。"
-    echo "     要么在 arm64 机器上构建载荷，要么挂 qemu-aarch64-static + binfmt 后重跑"
-    echo "     （CI 里就是 docker/setup-qemu-action，见 .github/workflows/release-full.yml）。"
-  fi
-  echo "     已有 rootfs 里带着这些工具时，这步可以跳过（校验仍然会跑）。"
+  echo "   ! 装不了 guest 工具（缺：$GUEST_MISSING）—— chroot 不可用，也没设 PROOT_CLI。"
+  echo "     原因通常是：rootfs 在 /sdcard 这类 FUSE 上（没有可执行位），"
+  echo "     或主机是 $HOST_ARCH 且没注册 binfmt（CI 见 docker/setup-qemu-action）。"
+  echo "     手工装（在 app 私有存储里）："
+  echo "       chroot $ROOTFS /bin/sh -c \"$APT_CMD\""
 fi
 for tool in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
   if [ ! -e "$ROOTFS/$tool" ]; then
