@@ -97,10 +97,26 @@ elif [ "$CHROOT_OK" = "1" ]; then
     rm -f "$ROOTFS/etc/resolv.conf"
     cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
   }
+  # ubuntu-base 里没有 /tmp、也不带设备节点：apt-key 写不了 /tmp/apt.conf.XXXX 就会
+  # 把仓库判成"未签名"（第 4 次 CI 的失败原因），sshd 的 postinst 还要 /dev/urandom。
+  mkdir -p "$ROOTFS/tmp" "$ROOTFS/dev" "$ROOTFS/proc"
+  chmod 1777 "$ROOTFS/tmp"
+  $SUDO mount --bind /dev "$ROOTFS/dev" 2>/dev/null || true
+  $SUDO mount -t proc proc "$ROOTFS/proc" 2>/dev/null || true
+  # 装包期间别启服务（这个 rootfs 的 sshd 由 start-dsh.sh / 恢复模式自己拉），装完拿掉。
+  POLICY_ADDED=0
+  if [ ! -e "$ROOTFS/usr/sbin/policy-rc.d" ]; then
+    printf '#!/bin/sh\nexit 101\n' > "$ROOTFS/usr/sbin/policy-rc.d"
+    chmod +x "$ROOTFS/usr/sbin/policy-rc.d"
+    POLICY_ADDED=1
+  fi
   $SUDO chroot "$ROOTFS" /usr/bin/env -i \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     DEBIAN_FRONTEND=noninteractive HOME=/root \
     /bin/sh -c "$APT_CMD" 2>&1 | tail -5 || echo "   ! apt 失败（下面按结果判断）"
+  $SUDO umount "$ROOTFS/proc" 2>/dev/null || true
+  $SUDO umount "$ROOTFS/dev" 2>/dev/null || true
+  if [ "$POLICY_ADDED" = "1" ]; then rm -f "$ROOTFS/usr/sbin/policy-rc.d"; fi
 elif [ -n "$PROOT_CLI" ] && [ -x "$PROOT_CLI" ]; then
   echo "   经 proot 安装（$PROOT_CLI）：$GUEST_PACKAGES"
   PROOT_TMP_DIR="${TMPDIR:-/tmp}/proot-build" "$PROOT_CLI" -0 -r "$ROOTFS" \
