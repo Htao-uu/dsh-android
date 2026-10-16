@@ -52,11 +52,17 @@ rm -rf "$ROOTFS/usr/local/include"
 # recovered.
 echo "== guest tools =="
 GUEST_PACKAGES="git curl ca-certificates python3 tmux htop openssh-server iproute2 less vim-tiny procps"
-# PRoot 只翻译系统调用和路径，**不模拟指令集**：rootfs 里是 arm64 二进制，
-# 所以这一步只能在 arm64 主机上跑（也就是本机/手机），x86_64 的 CI runner 上
-# 必须先挂 binfmt+qemu-aarch64-static 才能执行。与其在那边神秘地失败，这里直接说清楚。
+# PRoot 只翻译系统调用和路径，**不模拟指令集**：rootfs 里是 arm64 二进制。
+# 所以这步要么跑在 arm64 主机上（本机/手机），要么主机挂了 binfmt + qemu-aarch64-static
+# （x86_64 的 CI runner：`docker/setup-qemu-action` 或 apt 装 qemu-user-static 并注册）。
+# 判断依据是"能不能真的执行"，也就是 binfmt 有没有注册，而不是只看 uname。
 HOST_ARCH=$(uname -m)
-if [ -x "$ROOT/build/proot/libproot.so" ] && [ "$HOST_ARCH" = "aarch64" -o "$HOST_ARCH" = "arm64" ]; then
+can_run_target() {
+  [ -r /proc/sys/fs/binfmt_misc/qemu-aarch64 ] && return 0
+  case "$HOST_ARCH" in aarch64|arm64) return 0 ;; esac
+  return 1
+}
+if [ -x "$ROOT/build/proot/libproot.so" ] && can_run_target; then
   echo "   apt-get install（在 rootfs 里，经 proot）"
   PROOT_TMP_DIR="${TMPDIR:-/tmp}/proot-build" \
   "$ROOT/build/proot/libproot.so" -0 -r "$ROOTFS" \
@@ -69,8 +75,9 @@ else
   if [ ! -x "$ROOT/build/proot/libproot.so" ]; then
     echo "   ! 没有 build/proot/libproot.so（先跑 sh scripts/fetch-proot.sh）"
   else
-    echo "   ! 主机是 $HOST_ARCH，跑不了 rootfs 里的 arm64 apt。"
-    echo "     要么在 arm64 机器上构建载荷，要么给 x86_64 挂 qemu-aarch64-static + binfmt 后重跑。"
+    echo "   ! 主机是 $HOST_ARCH 且没有注册 binfmt，跑不了 rootfs 里的 arm64 apt。"
+    echo "     要么在 arm64 机器上构建载荷，要么挂 qemu-aarch64-static + binfmt 后重跑"
+    echo "     （CI 里就是 docker/setup-qemu-action，见 .github/workflows/release-full.yml）。"
   fi
   echo "     已有 rootfs 里带着这些工具时，这步可以跳过（校验仍然会跑）。"
 fi

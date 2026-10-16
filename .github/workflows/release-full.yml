@@ -176,7 +176,16 @@ jobs:
           fi
           echo "APP_CODE=$code" >> "$GITHUB_ENV"
 
-      - name: 准备 rootfs（ubuntu-base + 官方 node + dsh）
+      # prepare_rootfs.sh 要在 rootfs 里跑 arm64 的 apt（装 git/sshd/tmux 等 guest 工具），
+      # 而 runner 是 x86_64 —— 注册 binfmt 后内核会用 qemu-aarch64-static 执行它们。
+      # 少了这步，prepare_rootfs.sh 会明确跳过安装并让构建失败（它宁可失败，也不发一个
+      # 没有 sshd、恢复模式起不来的载荷）。
+      - name: binfmt（让 x86_64 runner 能执行载荷里的 arm64 二进制）
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: 准备 rootfs（ubuntu-base + 官方 node + guest 工具 + dsh）
         run: sh scripts/prepare_rootfs.sh
 
       - name: 组装 payload + 打包
