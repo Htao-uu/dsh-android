@@ -98,6 +98,39 @@ sh /root/.dsh-upgrade/upgrade-dsh.sh rec
 | 装一个带新载荷的 APK | **冲掉**：载荷更新会整棵替换 runtime（见 HANDOFF §4.1d），升级回到载荷里的版本。要让它成为默认，得改 `prepare_rootfs.sh` 并出一个新的终端版本（`t3`）与新 APK |
 | 备份 | 留在 `/opt/dsh-backups/<时间戳>-<版本>/`，脚本把最近一次记在 `$HOME/.dsh-upgrade/last-backup`。确认新版本没问题后可以删掉（每个约 234MB） |
 
+## 真机实录（2026-10-16，本机）
+
+**0.1.7-rc.2 → 0.2.0-rc.2，离线完成**（用预下载的 527MB 树，恢复模式里没联网）。日志里逐条通过：
+
+```
+· 用预下载的包：/root/.dsh-upgrade/bundle-0.2.0-rc.2（跳过 npm，不需要网络）
+✓ 已换上：0.2.0-rc.2          patched …jsonl/lib/index.js (2 call sites)
+✓ 版本 0.2.0-rc.2             patched …attachment-local/lib/index.js (2 call sites)
+✓ 入口 lib/bin.js             patched …fs-local/lib/index.js (1 call sites)
+✓ web 仍支持 --host/--port/--no-open/--trusted-host
+✓ 四个发布点都带硬链接补丁
+== 1/2 对照组：纯 headless profile（未加载市场）      ✓ control：正常
+== 2/2 实验组：同一 profile 加上 dshmarket            ✓ market：正常
+== 冒烟通过：加载市场前后，宿主都能完成一次真实模型调用
+```
+
+**第一次真机跑踩到的两个 bug**（都在脚本里，已修，commit `53b91c4`）：
+
+1. 从 `$HOME/.dsh-upgrade/` 那份重跑时必然失败：`cp "$0" 自己` 报 "same file"、附属脚本按
+   `$here/../patches/` 找变成 `/root/patches/` → 「✗ 工具复制失败 2」。现在源目标同一个文件就跳过
+   自拷贝，附属脚本优先用状态目录里已有的。
+2. 阶段判定被**孤儿进程**骗了：应用没能收掉旧的 PRoot 树（残留一个 harness 仍占 3080、两个恢复树、
+   一个 sshd 还在 8022 上），端口探针因此判成"harness 在跑"，于是人在恢复模式的终端里却走了阶段 A。
+   现在先问桥的 `/recovery/status`，`active=true` 就直接走阶段 B。
+
+**顺带发现的应用侧问题**（要装 1.2.1 的 APK 才能根治）：`ServerBus` 在连续重启时丢掉了旧进程的引用，
+留下 2 个孤儿恢复树 + 1 个孤儿 harness；而这台设备装的 10211 还没有"正常启动时锁一次 root 密码"
+那行自愈，所以恢复模式退出后 `/etc/shadow` 里留着密码哈希、而 8022 上的 sshd 还活着 —— 那段时间是
+真实的暴露面（密码只有看过面板的人知道）。已手工清理并锁回 `*`。
+
+**升级留下的磁盘**：备份 `234M` + 挪开的旧树 `234M` + 预下载包 `527M` + npm 缓存 `246M`。
+确认新版本没问题后，后三项可以删（备份建议留着，`rec` 靠它）。
+
 ## 日志
 
 全过程写在 `$HOME/.dsh-upgrade/upgrade.log`（npm 的输出也在里面）。失败时把这段发出来就能定位。
