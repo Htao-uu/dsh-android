@@ -11,6 +11,7 @@
 #   sh upgrade-dsh.sh                       # 默认升级到 0.2.0-rc.2
 #   sh upgrade-dsh.sh --version=0.2.0-rc.1  # 指定版本
 #   sh upgrade-dsh.sh --bundle=DIR|TGZ      # 用预下载好的树，完全不联网（见下）
+#   sh upgrade-dsh.sh --tools=DIR           # 从哪儿取 apply-hardlink-patch.py 等附属脚本
 #   sh upgrade-dsh.sh --dry-run             # 只做检查，不动任何东西
 #   sh upgrade-dsh.sh rec                   # 回滚到最近一次备份
 #   sh upgrade-dsh.sh rec -y                # 回滚，不问
@@ -62,6 +63,7 @@ KEEP_BROKEN=0
 FORCE=0
 STAY=0
 BUNDLE=""
+TOOLS_DIR="${DSH_UPGRADE_TOOLS:-}"
 
 usage() {
   sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
@@ -78,6 +80,7 @@ for arg in "$@"; do
     --force) FORCE=1 ;;
     --stay) STAY=1 ;;
     --bundle=*) BUNDLE="${arg#--bundle=}" ;;
+    --tools=*) TOOLS_DIR="${arg#--tools=}" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "upgrade-dsh: 未知参数 $arg（--help 看用法）" >&2; exit 2 ;;
   esac
@@ -120,6 +123,21 @@ free_mb() {
   df -Pm "$DSH_INSTALL" 2>/dev/null | awk 'NR==2 {print $4}' || echo 0
 }
 
+# 现在是不是恢复模式？**由应用说的算**。
+#
+# 端口/进程探针不够用：上一次恢复模式退出时留下过一个孤儿 harness 仍占着 3080，
+# 探针因此判定"harness 在跑"，于是用户明明站在恢复模式的终端里，脚本却走了阶段 A
+# （那次还顺手把自己卡在工具复制上）。桥的 /recovery/status 是权威信号。
+#   0 = 是恢复模式（走阶段 B）  1 = 不是（harness 那条路）  2 = 桥不可用，说不清
+recovery_active() {
+  out=$(bridge /recovery/status 2>/dev/null || true)
+  case "$out" in
+    *'"active":true'*|*'"active": true'*) return 0 ;;
+    *'"active":false'*|*'"active": false'*) return 1 ;;
+  esac
+  return 2
+}
+
 bridge() {
   # 用应用注入的环境变量调控制桥。恢复模式下这个环境同样存在（ServerBus 每次都注入）。
   url="${DSH_ANDROID_BRIDGE_URL:-}"; token="${DSH_ANDROID_BRIDGE_TOKEN:-}"
@@ -137,13 +155,38 @@ bridge() {
 # 跨重启存活）。阶段 B 只依赖 $STATE_DIR。
 install_tools() {
   here=$(cd "$(dirname "$0")" && pwd)
-  cp -f "$0" "$STATE_DIR/upgrade-dsh.sh"
-  chmod +x "$STATE_DIR/upgrade-dsh.sh"
+  state_abs=$(cd "$STATE_DIR" && pwd)
+
+  # 把自己放进状态目录（恢复模式里手机存储不一定挂着）。**从状态目录重跑时**源和目标
+  # 是同一个文件，cp 会报 "are the same file" 并返回非 0 —— 第一次就是栽在这里：
+  # 用户照说明在恢复模式里跑了 $STATE_DIR 下那份，脚本却因此判定"工具复制失败"。
+  if [ "$here" != "$state_abs" ]; then
+    cp -f "$0" "$STATE_DIR/upgrade-dsh.sh" || return 1
+  fi
+  chmod +x "$STATE_DIR/upgrade-dsh.sh" 2>/dev/null || true
+
+  # 两个附属脚本：状态目录里已经有的就直接用；否则从仓库（脚本住在 scripts/ 下）
+  # 或 --tools= 指定的目录补齐。
   for rel in "patches/apply-hardlink-patch.py" "scripts/smoke-market-llm.sh"; do
-    src="$here/../$rel"
-    [ -f "$src" ] || { log "  找不到 $rel（脚本需要在仓库里运行：scripts/upgrade-dsh.sh）"; return 1; }
-    cp -f "$src" "$STATE_DIR/$(basename "$rel")"
+    name=$(basename "$rel")
+    [ -f "$STATE_DIR/$name" ] && continue
+    for candidate in "$here/../$rel" "$here/$rel" "${TOOLS_DIR:-/nonexistent}/$name"; do
+      if [ -f "$candidate" ]; then
+        cp -f "$candidate" "$STATE_DIR/$name"
+        log "  · 从 $candidate 复制 $name"
+        break
+      fi
+    done
   done
+
+  # 补丁是硬性依赖：没有它，新树会留下悬空软链（FINDINGS §1），所以宁可停下来。
+  # 冒烟脚本缺了只是少一道闸，警告即可。
+  if [ ! -f "$STATE_DIR/apply-hardlink-patch.py" ]; then
+    log "  ✗ 缺 apply-hardlink-patch.py（必须有）。补上再跑："
+    log "      cp <仓库>/patches/apply-hardlink-patch.py $STATE_DIR/"
+    return 1
+  fi
+  [ -f "$STATE_DIR/smoke-market-llm.sh" ] || log "  ! 没有 smoke-market-llm.sh —— 冒烟会被跳过"
   return 0
 }
 
@@ -442,6 +485,19 @@ if [ "$MODE" = "rollback" ]; then
   do_rollback
   exit 0
 fi
+
+recovery=0
+recovery_active || recovery=$?
+if [ "$recovery" = "0" ]; then
+  log "  桥说现在处于恢复模式 → 直接走阶段 B"
+  if harness_live; then
+    log "  （注意：另有一个孤儿 harness 还在跑。离线换树是把旧树整棵挪开，"
+    log "    所以它握着的 inode 不受影响 —— 升级完最好重启一次应用。）"
+  fi
+  phase_b
+  exit 0
+fi
+[ "$recovery" = "2" ] && log "  ! 桥不可用，只能靠端口/进程判断"
 
 if harness_live && [ "$FORCE" != "1" ]; then
   phase_a
