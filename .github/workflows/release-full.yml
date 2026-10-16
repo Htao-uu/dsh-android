@@ -117,9 +117,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
+          # apksig 在 **Google Maven**，不在 Maven Central（repo1 上 9.x 一律 404 ——
+          # 第一次真跑就栽在这里）。URL 形式与 scripts/restore-build-toolchain.sh 一致。
           APKSIG_SHA=7ae2e5980c77d853e3513074ee7c822bbdcdcde1668889d17faa7fe8bc8aa821
           curl -fsSL -o /tmp/apksig.jar \
-            https://repo1.maven.org/maven2/com/android/tools/build/apksig/9.4.1/apksig-9.4.1.jar
+            https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/9.4.1/apksig-9.4.1.jar
           echo "$APKSIG_SHA  /tmp/apksig.jar" | sha256sum -c -
 
       - name: tag 与仓库版本必须一致
