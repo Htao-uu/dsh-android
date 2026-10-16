@@ -31,6 +31,14 @@ DEV_SUFFIXES = (".map", ".d.ts", ".d.mts", ".d.cts", ".ts", ".tsx", ".mts", ".ct
 DOC_PREFIXES = ("readme", "changelog", "history", "contributing")
 DOC_SUFFIXES = (".md", ".markdown", ".txt", ".rst")
 
+# sharp's CPU/libc-specific halves are dead weight on a glibc arm64 guest: the loader
+# reads package.json and never looks at the musl build or the wasm fallback, so these
+# go wholesale. Decided up front so their (real) entry points are not mistaken for
+# something the trim broke.
+img = root / "@img"
+drop_whole = [child for child in sorted(img.iterdir())
+              if child.is_dir() and ("wasm32" in child.name or "linuxmusl" in child.name)] if img.is_dir() else []
+
 
 def entry_points(directory):
     """Relative paths package.json promises to resolve; None if it is unreadable."""
@@ -63,11 +71,11 @@ def protected(relative, keep):
 
 def packages():
     for child in sorted(root.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
+        if not child.is_dir() or child.name.startswith(".") or child in drop_whole:
             continue
         if child.name.startswith("@"):
             for scoped in sorted(child.iterdir()):
-                if scoped.is_dir():
+                if scoped.is_dir() and scoped not in drop_whole:
                     yield scoped
         else:
             yield child
@@ -116,20 +124,13 @@ for package in packages():
                 except OSError as error:
                     print(f"trim_runtime: {relative}: {error}", file=sys.stderr)
 
-# sharp's CPU/libc-specific halves are dead weight on a glibc arm64 guest: the
-# loader reads package.json and never looks at the musl build or the wasm
-# fallback, so dropping them cannot break the native path.
-img = root / "@img"
-if img.is_dir():
-    for child in sorted(img.iterdir()):
-        if not child.is_dir() or not ("wasm32" in child.name or "linuxmusl" in child.name):
-            continue
-        size = sum(f.stat().st_size for f in child.rglob("*") if f.is_file())
-        removed_bytes += size
-        removed_dirs += 1
-        print(f"  drop @img/{child.name} ({size / 1048576:.1f} MiB)")
-        if not dry:
-            shutil.rmtree(child, ignore_errors=True)
+for package in drop_whole:
+    size = sum(f.stat().st_size for f in package.rglob("*") if f.is_file())
+    removed_bytes += size
+    removed_dirs += 1
+    print(f"  drop @img/{package.name} ({size / 1048576:.1f} MiB)")
+    if not dry:
+        shutil.rmtree(package, ignore_errors=True)
 
 # Regression guard: every entry point that existed before must still exist. If this
 # fires, protected() has a hole — a package would load nothing, in the payload, on a
