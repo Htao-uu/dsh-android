@@ -19,6 +19,25 @@ npm 上**没有 `0.2.0`** 这个版本。`@deepseek-ai/dsh` 的现状（2026-10-
 所以"升级到 0.2.0"实际就是 **`0.2.0-rc.2`**，这也是脚本的默认值；要别的版本用
 `--version=0.2.1-alpha.4`。
 
+## 离线升级（推荐）：先把包下好
+
+`$HOME/.dsh-upgrade/bundle-<版本>/`（目录里有 `node_modules`）或 `bundle-<版本>.tar.gz`
+存在时，阶段 B **跳过 npm** 直接把那棵树换上去 —— **恢复模式里不需要网络**。没有预下载包时才退回
+`npm i`（npm 缓存热过的话也很快）。
+
+在网络好的时候（普通模式即可）下好：
+
+```sh
+cd "$HOME/.dsh-upgrade" && mkdir -p bundle-0.2.0-rc.2
+cp /opt/dsh/package.json /opt/dsh/package-lock.json bundle-0.2.0-rc.2/
+cd bundle-0.2.0-rc.2
+HOME="$HOME/.dsh-upgrade/npmhome" npm i --no-audit --no-fund \
+  --os=linux --cpu=arm64 --libc=glibc "@deepseek-ai/dsh@0.2.0-rc.2"
+```
+
+**补丁不用提前打**：阶段 B 每次都会重新跑 `apply-hardlink-patch.py` 并校验锚点。
+这台设备上已经下好了（527MB / 543 个包），并且离线路径实测 `EXIT=0`（换树 + 补丁 4 处命中 + 四项校验）。
+
 ## 怎么用
 
 ```sh

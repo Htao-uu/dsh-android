@@ -10,9 +10,14 @@
 #
 #   sh upgrade-dsh.sh                       # 默认升级到 0.2.0-rc.2
 #   sh upgrade-dsh.sh --version=0.2.0-rc.1  # 指定版本
+#   sh upgrade-dsh.sh --bundle=DIR|TGZ      # 用预下载好的树，完全不联网（见下）
 #   sh upgrade-dsh.sh --dry-run             # 只做检查，不动任何东西
 #   sh upgrade-dsh.sh rec                   # 回滚到最近一次备份
 #   sh upgrade-dsh.sh rec -y                # 回滚，不问
+#
+# 离线升级：$HOME/.dsh-upgrade/bundle-<版本>/（目录，里面有 node_modules）或
+# bundle-<版本>.tar.gz（根下就是 node_modules）存在时，脚本跳过 npm，直接把那棵树换上去 ——
+# 恢复模式里就不需要网络，手机信号不稳时这是最稳的路子。没有预下载包时退回 `npm i`。
 #
 # 它自己分两个阶段，靠一个"待办标记"衔接，所以同一条命令可以重复运行：
 #
@@ -56,6 +61,7 @@ SKIP_SMOKE=0
 KEEP_BROKEN=0
 FORCE=0
 STAY=0
+BUNDLE=""
 
 usage() {
   sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
@@ -71,6 +77,7 @@ for arg in "$@"; do
     --keep-broken) KEEP_BROKEN=1 ;;
     --force) FORCE=1 ;;
     --stay) STAY=1 ;;
+    --bundle=*) BUNDLE="${arg#--bundle=}" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "upgrade-dsh: 未知参数 $arg（--help 看用法）" >&2; exit 2 ;;
   esac
@@ -197,6 +204,46 @@ smoke() {
   return 1
 }
 
+# --------------------------------------------------------------- 预下载包
+
+# 可用的预下载包路径（目录或 tar.gz），没有就非 0。
+find_bundle() {
+  if [ -n "$BUNDLE" ]; then
+    if [ -d "$BUNDLE/node_modules" ] || [ -f "$BUNDLE" ]; then
+      printf '%s\n' "$BUNDLE"; return 0
+    fi
+    log "  ! --bundle=$BUNDLE 不存在（要么目录里有 node_modules，要么是 tar.gz）"
+    return 1
+  fi
+  for candidate in "$STATE_DIR/bundle-$VERSION" "$STATE_DIR/bundle-$VERSION.tar.gz"; do
+    if [ -e "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+  done
+  return 1
+}
+
+# 换上预下载的树。旧树先挪开而不是删：备份 + 旧树 + 新树都在，任何一步出错都能退回去。
+install_from_bundle() {
+  src="$1"; work="$src"
+  if [ ! -d "$src/node_modules" ]; then
+    unpack="$STATE_DIR/unpack-$$"
+    rm -rf "$unpack"; mkdir -p "$unpack"
+    log "  · 解压预下载包 $src"
+    tar xzf "$src" -C "$unpack" >> "$LOG" 2>&1 || { log "  ✗ 解压失败"; return 1; }
+    found=$(find "$unpack" -maxdepth 3 -type d -name node_modules | head -1 || true)
+    [ -n "$found" ] || { log "  ✗ 包里找不到 node_modules"; return 1; }
+    work=$(dirname "$found")
+  fi
+  log "  · 用预下载的树替换 node_modules（不联网）：$work"
+  stamp=$(date +%Y%m%d-%H%M%S)
+  mv "$DSH_INSTALL/node_modules" "$DSH_INSTALL/node_modules.replaced-$stamp"
+  log "  旧树挪到 node_modules.replaced-$stamp"
+  cp -a "$work/node_modules" "$DSH_INSTALL/node_modules" || return 1
+  for f in package.json package-lock.json; do
+    [ -f "$work/$f" ] && cp -a "$work/$f" "$DSH_INSTALL/$f"
+  done
+  return 0
+}
+
 # ------------------------------------------------------------------ 备份/回滚
 
 new_backup() {
@@ -319,18 +366,32 @@ phase_b() {
 
   new_backup
 
-  log "  · npm 安装 @deepseek-ai/dsh@$VERSION（输出写进 $LOG）…"
-  # 与 prepare_rootfs.sh 同一套平台参数：宿主是 arm64，但要让 npm 按 glibc/arm64 选包
-  if ( cd "$DSH_INSTALL" && HOME="$STATE_DIR/npmhome" "$NPM_BIN" i \
-        --no-audit --no-fund --os=linux --cpu=arm64 --libc=glibc \
-        "@deepseek-ai/dsh@$VERSION" >> "$LOG" 2>&1 ); then
-    log "  ✓ 安装完成：$(installed_version)"
+  bundle=$(find_bundle || true)
+  if [ -n "${bundle:-}" ]; then
+    log "  · 用预下载的包：$bundle（跳过 npm，不需要网络）"
+    if install_from_bundle "$bundle"; then
+      log "  ✓ 已换上：$(installed_version)"
+    else
+      log "  ✗ 换预下载的树失败"
+      [ "$KEEP_BROKEN" = "1" ] && die "保留现场（--keep-broken），没有回滚" 1
+      do_rollback
+      exit 1
+    fi
   else
-    log "  ✗ npm 安装失败，最后 25 行："
-    tail -25 "$LOG" | sed 's/^/      /'
-    [ "$KEEP_BROKEN" = "1" ] && die "保留现场（--keep-broken），没有回滚" 1
-    do_rollback
-    exit 1
+    log "  · 没有预下载包，走 npm 安装 @deepseek-ai/dsh@$VERSION（输出写进 $LOG）…"
+    log "    想不联网升级：把树放到 $STATE_DIR/bundle-$VERSION/，或用 --bundle=…"
+    # 与 prepare_rootfs.sh 同一套平台参数：宿主是 arm64，但要让 npm 按 glibc/arm64 选包
+    if ( cd "$DSH_INSTALL" && HOME="$STATE_DIR/npmhome" "$NPM_BIN" i \
+          --no-audit --no-fund --os=linux --cpu=arm64 --libc=glibc \
+          "@deepseek-ai/dsh@$VERSION" >> "$LOG" 2>&1 ); then
+      log "  ✓ 安装完成：$(installed_version)"
+    else
+      log "  ✗ npm 安装失败，最后 25 行："
+      tail -25 "$LOG" | sed 's/^/      /'
+      [ "$KEEP_BROKEN" = "1" ] && die "保留现场（--keep-broken），没有回滚" 1
+      do_rollback
+      exit 1
+    fi
   fi
 
   log "  · 重新打硬链接补丁…"
