@@ -150,6 +150,10 @@ rm -rf "$ROOTFS/var/cache/apt/archives" "$ROOTFS/var/lib/apt/lists"
 mkdir -p "$ROOTFS/var/cache/apt/archives/partial" "$ROOTFS/var/lib/apt/lists/partial"
 chmod 700 "$ROOTFS/var/cache/apt/archives/partial" "$ROOTFS/var/lib/apt/lists/partial"
 
+# 手册 / INFO / 包文档也不是运行时（~8 MB 未压缩）。copyright 留着 —— 那是许可证信息。
+find "$ROOTFS/usr/share/doc" -mindepth 2 -maxdepth 2 ! -name copyright -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$ROOTFS/usr/share/man" "$ROOTFS/usr/share/info"
+
 for tool in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
   if [ ! -e "$ROOTFS/$tool" ]; then
     echo "error: 载荷缺 $tool —— guest 工具没装上（apt 那步失败？）" >&2
@@ -175,6 +179,12 @@ HOME="${TMPDIR:-/tmp}/npmhome" npm i --no-audit --no-fund \
 # The stock node binary carries debug sections; stripping is worth ~18 MB and
 # changes nothing at runtime.
 strip --strip-all "$ROOTFS/usr/local/bin/node" 2>/dev/null || true
+
+echo "== trim runtime (node_modules) =="
+# Source maps, .d.ts, TS sources, docs and test trees are not runtime, and this tree
+# carries ~120 MB of them (plus sharp's wasm/musl halves). Nothing package.json
+# promises is ever removed — the script fails the build if it would.
+sh "$ROOT/scripts/trim_runtime.sh" "$ROOTFS/opt/dsh/node_modules"
 
 echo "== done =="
 du -sh "$ROOTFS" "$ROOTFS/opt/dsh/node_modules" 2>/dev/null || true
