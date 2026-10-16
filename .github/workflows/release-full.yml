@@ -98,6 +98,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Node（与载荷里那份同版本）
+        uses: actions/setup-node@v4
+        with:
+          # prepare_rootfs.sh runs `npm i` with the *host's* npm and only pins the
+          # platform flags; the tree it resolves therefore depends on the runner's
+          # Node. Pinning it to the version the payload itself ships keeps host and
+          # guest on the pair this project tested — and keeps a rebuild on a future
+          # runner image from silently producing a different dependency tree.
+          node-version: "22.23.2"
+
       - name: Android SDK（android-36 + build-tools）
         uses: android-actions/setup-android@v3
         with:
