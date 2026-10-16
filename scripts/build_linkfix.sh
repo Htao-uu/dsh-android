@@ -66,7 +66,21 @@ if [ -f "$OUT" ] && [ "$OUT" -nt "$SRC" ]; then
   exit 0
 fi
 
-CC="${CC:-gcc}"
+# 目标是 aarch64 的 .so：x86_64 主机上不能用宿主 gcc —— linkfix.c 里写的是 x8/x0
+# 这些 aarch64 寄存器名，第 6 次 CI 就报在这里（"invalid register name for 'x8'"）。
+# 有交叉编译器就用它；aarch64 主机（手机沙箱）继续用自带的 gcc。
+if [ -z "${CC:-}" ]; then
+  case "$(uname -m)" in
+    aarch64|arm64) CC=gcc ;;
+    *)
+      if command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+        CC=aarch64-linux-gnu-gcc
+      else
+        CC=gcc
+      fi
+      ;;
+  esac
+fi
 command -v "$CC" >/dev/null || {
   echo "linkfix: need $CC to build $OUT (the release paths must not ship a stale or missing shim)" >&2
   exit 1

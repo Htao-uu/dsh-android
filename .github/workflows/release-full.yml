@@ -192,6 +192,9 @@ jobs:
 
       - name: 组装 payload + 打包
         run: |
+          # 这一步要交叉编译 liblinkfix.so（guest 是 aarch64），CC 由它给出；
+          # 少了这一行就会用宿主 gcc 编 aarch64 汇编，第 6 次 CI 就死在这儿。
+          . scripts/ci_android_env.sh
           sh scripts/assemble_payload.sh
           python3 scripts/make_payload_zip.py build/rootfs-ubuntu build/payload-assets/payload.zip
 
