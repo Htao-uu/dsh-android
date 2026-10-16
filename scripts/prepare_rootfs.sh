@@ -133,6 +133,14 @@ else
   echo "     手工装（在 app 私有存储里）："
   echo "       ${SUDO:+sudo }chroot $ROOTFS /bin/sh -c \"$APT_CMD\""
 fi
+
+# 打包是以 runner（非 root）身份跑的：apt 在 chroot 里以 root 建的目录（/etc/ssl/private、
+# var/lib/apt/lists/partial …）是 700 root，读不了就 EACCES —— 第 5 次 CI 正是死在收尾那行 du。
+# 从缓存恢复的树同理。这里统一把属主改回当前用户；权限位保持不动（载荷 zip 只存模式，不存属主）。
+if [ -n "$SUDO" ]; then
+  $SUDO chown -R "$(id -u):$(id -g)" "$ROOTFS" 2>/dev/null || true
+fi
+
 for tool in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
   if [ ! -e "$ROOTFS/$tool" ]; then
     echo "error: 载荷缺 $tool —— guest 工具没装上（apt 那步失败？）" >&2
@@ -160,5 +168,5 @@ HOME="${TMPDIR:-/tmp}/npmhome" npm i --no-audit --no-fund \
 strip --strip-all "$ROOTFS/usr/local/bin/node" 2>/dev/null || true
 
 echo "== done =="
-du -sh "$ROOTFS" "$ROOTFS/opt/dsh/node_modules"
+du -sh "$ROOTFS" "$ROOTFS/opt/dsh/node_modules" 2>/dev/null || true
 echo "next: sh scripts/assemble_payload.sh"
