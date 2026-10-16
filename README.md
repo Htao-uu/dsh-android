@@ -27,6 +27,9 @@ DeepSeek Harness 官方以 `npx @deepseek-ai/dsh web` 的形式在电脑上跑�
 - **导出文件到手机**：沙箱里的文件一键复制到手机 Download，文件预览页和设置页都有入口。
 - **操作手机本身**（可选，需要 [Shizuku](https://shizuku.rikka.app/)）：内置 `shiz` 命令，以 Android shell 身份执行 ——
   打开应用、看屏幕截图、调亮度、开关勿扰、读通知、装 APK……随附的 `phone-control` 技能会教 agent 怎么用。
+- **恢复模式**：harness 起不来时也能进沙箱 —— 连续几次启动失败后应用会自己切换到恢复模式，
+  不加载 harness，直接起来一个 SSH 服务和一个 shell（密码是每次进入时新生成的令牌）。
+  详见 [docs/RECOVERY.md](docs/RECOVERY.md)。
 - **跟随系统主题**：浅色/深色、连图标都会反色；Android 13+ 还支持主题化图标。
 
 ## 安装
@@ -78,6 +81,10 @@ DeepSeek Harness 官方以 `npx @deepseek-ai/dsh web` 的形式在电脑上跑�
 
 **服务起不来 / 白屏怎么办？**
 右上角会出现 `≡` 按钮（服务没起来时它才出现），点开是控制台：能看日志、启停服务、导入 rootfs。
+如果连重启几次都起不来，用控制台里的**恢复模式**：它不加载 harness，只起来一个 SSH 和一个 shell，
+让你进沙箱把 profile、依赖或磁盘修回来 —— 面板上会给出连接命令和本次会话的令牌。
+同一 Wi-Fi 用 `ssh -p 8022 root@<手机 IP>`，插着线用 `adb forward tcp:8022 tcp:8022`，
+只有手机就点「手机内控制台」。详见 [docs/RECOVERY.md](docs/RECOVERY.md)。
 
 **耗电吗？**
 服务在前台服务里跑，带一个 CPU 保持唤醒的锁，好让长时间任务不被系统冻结。
@@ -103,5 +110,5 @@ arm64（arm64-v8a）的 Android 8.0+ 设备。x86 设备、32 位设备不支持
 
 ---
 
-<sub>想自己构建、看架构设计或踩坑记录？[docs/BUILD.md](docs/BUILD.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/FINDINGS.md](docs/FINDINGS.md)
+<sub>想自己构建、看架构设计或踩坑记录？[docs/BUILD.md](docs/BUILD.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/FINDINGS.md](docs/FINDINGS.md) · [docs/RECOVERY.md](docs/RECOVERY.md) · [docs/CI.md](docs/CI.md)
 · 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)</sub>

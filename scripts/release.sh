@@ -15,6 +15,15 @@
 #
 # Usage: release.sh            # uses VERSION
 #        release.sh 1.2.0      # bumps VERSION first
+#
+# Env:
+#   DSH_RELEASE_TAG   publish to this tag instead of v<VERSION>. It must carry the
+#                     same version: the tag decides where the assets land, and a
+#                     mismatch either creates a tag at the default branch's HEAD
+#                     or attaches this build to a different release.
+#   DSH_SLIM_ONLY=1   the 2 MB slim APK is ready but the full one is not: publish
+#                     what exists and let the release-full workflow attach the
+#                     full APK afterwards (it triggers on `release: published`).
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -29,14 +38,29 @@ VERSION="${1:-$(cat "$ROOT/VERSION")}"
 if [ "${1:-}" != "" ]; then
   echo "$VERSION" > "$ROOT/VERSION"
 fi
-TAG="v$VERSION"
+TAG="${DSH_RELEASE_TAG:-v$VERSION}"
+# The tag decides the release; if it disagrees with VERSION, the notes (rendered
+# from VERSION) describe a different build than the one being uploaded.
+TAG_VERSION="${TAG#v}"
+[ "$TAG_VERSION" = "$VERSION" ] || {
+  echo "DSH_RELEASE_TAG=$TAG 与 VERSION=$VERSION 不一致：拒绝发布" >&2
+  exit 1
+}
 APK="$ROOT/out/dsh-android.apk"
 SLIM_APK="$ROOT/out/dsh-android-slim.apk"
 HOT="$ROOT/out/dsh-hot.zip"
 SUMS="$ROOT/out/SHA256SUMS"
 
 echo "== 发布 $TAG =="
-[ -f "$APK" ] || { echo "缺少 $APK，先跑 scripts/build_apk.sh" >&2; exit 1; }
+if [ ! -f "$APK" ]; then
+  if [ "${DSH_SLIM_ONLY:-0}" = "1" ] && [ -f "$SLIM_APK" ]; then
+    echo "   瘦包先行：本次不带全量 APK，release-full workflow 会在发布后补上"
+  else
+    echo "缺少 $APK，先跑 scripts/build_apk.sh" >&2
+    echo "（只想先发瘦包让 CI 补全量：DSH_SLIM_ONLY=1 sh scripts/release.sh）" >&2
+    exit 1
+  fi
+fi
 [ -f "$HOT" ] || cp "$ROOT/build/hot-assets/hot.zip" "$HOT"
 
 if [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -109,10 +133,20 @@ if not data.get("id"):
 fi
 
 echo "== 上传资产 =="
-( cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" "$(basename "$HOT")" > "$SUMS" )
+(
+  cd "$(dirname "$APK")"
+  # Only what is actually being uploaded: sha256sum on a missing file would abort
+  # the publish after the assets were already replaced.
+  { [ -f dsh-android.apk ] && echo dsh-android.apk
+    [ -f dsh-android-slim.apk ] && echo dsh-android-slim.apk
+    echo dsh-hot.zip
+  } | xargs sha256sum > "$SUMS"
+)
 
-UPLOADS="$APK:application/vnd.android.package-archive
-$HOT:application/zip
+UPLOADS=""
+[ -f "$APK" ] && UPLOADS="$APK:application/vnd.android.package-archive
+"
+UPLOADS="$UPLOADS$HOT:application/zip
 $SUMS:text/plain"
 # Optional: the shell without the runtime. Same APK minus the 190 MB payload, for
 # phones that already have the terminal — which is every phone after the first

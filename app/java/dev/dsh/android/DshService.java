@@ -36,7 +36,16 @@ public final class DshService extends Service implements ServerBus.Listener {
             if (App.i().prefs.getBoolean("autoRestart", true)
                     && !ServerBus.running()
                     && Payload.isReady()) {
-                App.log("watchdog: restarting server");
+                // Repeated failures without a single readiness in between is not a
+                // slow start any more — it is the case recovery mode exists for.
+                // Entering it here, rather than waiting for the user to notice a
+                // blank page and guess, is the difference between "the app is
+                // broken" and "the app handed you a shell".
+                if (Recovery.shouldAutoEnter()) {
+                    Recovery.enter("harness 连续启动失败 " + Recovery.failures() + " 次");
+                }
+                App.log("watchdog: restarting server"
+                        + (Recovery.active() ? " (recovery)" : ""));
                 ServerBus.start(DshService.this, Distros.active(DshService.this),
                         App.i().prefs.getString("apiKey", ""));
             }
@@ -144,6 +153,11 @@ public final class DshService extends Service implements ServerBus.Listener {
     }
 
     private String describe() {
+        if (Recovery.active()) {
+            return Recovery.sshReady()
+                    ? "恢复模式 · ssh 127.0.0.1:" + Recovery.port() + " · 打开应用看令牌"
+                    : "恢复模式启动中…";
+        }
         switch (ServerBus.state()) {
             case RUNNING:
                 return "运行中 · 127.0.0.1:" + App.i().activePort();

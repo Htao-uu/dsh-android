@@ -46,7 +46,8 @@ sh "$ROOT/scripts/trim_vendor.sh"
 
 echo "== overlay / =="
 cp -a "$ROOT/payload/." "$ROOTFS/"
-chmod +x "$ROOTFS/opt/dsh/android/start-dsh.sh" "$ROOTFS/usr/local/bin/shiz" "$ROOTFS/usr/local/bin/ui"
+chmod +x "$ROOTFS/opt/dsh/android/start-dsh.sh" "$ROOTFS/opt/dsh/android/recovery.sh" \
+         "$ROOTFS/usr/local/bin/shiz" "$ROOTFS/usr/local/bin/ui"
 chmod 755 "$ROOTFS/opt/dsh/android"
 
 echo "== guest home (skills, instructions) =="
@@ -73,6 +74,23 @@ rm -rf "$ROOTFS/opt/dsh/dsh-plugin-android" "$SEED/profiles/web/node_modules/dsh
 # dropped, and assert below that nothing brought it back.
 rm -rf "$ROOTFS/opt/dsh/dsh-home-seed/.dsh/profiles/web/node_modules/@local/dsh-market" \
        "$SEED/profiles/web/node_modules/@local/dsh-market"
+
+echo "== phone layout patch =="
+# Nothing used to call this, yet the sanity list below requires its output — so a
+# fresh rootfs could not be assembled at all, and CI (which always starts cold)
+# could never pass. The patch fails closed now: a substitution that matches
+# nothing is an error, not a silent desktop layout on a phone.
+python3 "$ROOT/patches/apply-ui-patch.py" "$ROOTFS/opt/dsh/node_modules"
+
+echo "== guest shell syntax =="
+# Cheap, and it catches a whole class of "the sandbox boots into nothing"
+# mistakes: the guest runs these with /bin/sh (dash), which accepts less than
+# bash does. A construct bash -n allows can still be a parse error there.
+for script in "$ROOTFS/opt/dsh/android/start-dsh.sh" "$ROOTFS/opt/dsh/android/recovery.sh"; do
+  [ -f "$script" ] || continue
+  sh -n "$script" || { echo "shell syntax error: $script" >&2; exit 1; }
+  echo "  ok  ${script#$ROOTFS/}"
+done
 
 echo "== dsh source patches =="
 python3 "$ROOT/patches/apply-hardlink-patch.py" "$ROOTFS/opt/dsh/node_modules"
@@ -103,6 +121,8 @@ if [ -f "$ROOT/scripts/check-legacy-market-residue.mjs" ]; then
 fi
 for f in opt/dsh/android/pty-server.mjs \
          opt/dsh/android/start-dsh.sh \
+         opt/dsh/android/recovery.sh \
+         opt/dsh/android/recovery-console.html \
          opt/dsh/node_modules/node-pty/prebuilds/linux-arm64/pty.node \
          opt/dsh/node_modules/@xterm/xterm/lib/xterm.js \
          opt/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.css \

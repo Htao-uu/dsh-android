@@ -1,5 +1,7 @@
 package dev.dsh.android;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -16,6 +18,7 @@ import android.widget.ScrollView;
 import android.widget.Space;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.List;
 
@@ -68,6 +71,22 @@ public final class Panel {
 
         /** Open the file picker for the floating ball's picture. */
         void onBallImageRequested();
+
+        /**
+         * Recovery mode: the way in when the harness itself is what broke.
+         *
+         * Four calls instead of one, because each does something different to the
+         * sandbox (start it as a shell host, go back to the harness, mint a new
+         * secret, or just show the console) and the panel should own nothing but
+         * the labels.
+         */
+        void enterRecovery();
+
+        void exitRecovery();
+
+        void rotateRecoveryToken();
+
+        void openRecoveryConsole();
     }
 
     // Resolved from resources, so values-night/ decides light vs dark. The app
@@ -93,6 +112,11 @@ public final class Panel {
     private final EditText apiKey;
     private final TextView logView;
     private final TextView progress;
+    private final TextView recoveryStatus;
+    private final TextView recoveryCommand;
+    private final Button recoveryEnter;
+    private final Button recoveryExit;
+    private final Button recoveryConsole;
 
     private String editingDistro = App.BUNDLED_ID;
 
@@ -150,6 +174,40 @@ public final class Panel {
         row2.addView(action("在浏览器打开", () -> host.onOpenInBrowser()), weight());
         row2.addView(action("导入 rootfs", () -> host.onImport()), weight());
         body.addView(row2);
+
+        // --- recovery -------------------------------------------------------
+        // First thing under the server buttons, because the states that need it
+        // are the states where nothing else on this screen can help.
+        body.addView(section("恢复模式（harness 起不来时用）"));
+        recoveryStatus = hint("");
+        recoveryStatus.setTextSize(12);
+        body.addView(recoveryStatus);
+
+        LinearLayout recoveryRow = row();
+        recoveryEnter = action("进入恢复模式", () -> host.enterRecovery());
+        recoveryExit = action("退出恢复模式", () -> host.exitRecovery());
+        recoveryConsole = action("手机内控制台", () -> host.openRecoveryConsole());
+        recoveryRow.addView(recoveryEnter, weight());
+        recoveryRow.addView(recoveryExit, weight());
+        recoveryRow.addView(recoveryConsole, weight());
+        body.addView(recoveryRow);
+
+        recoveryCommand = new TextView(ctx);
+        recoveryCommand.setTextSize(11);
+        recoveryCommand.setTextColor(MUTED);
+        recoveryCommand.setTypeface(Typeface.MONOSPACE);
+        recoveryCommand.setTextIsSelectable(true);
+        recoveryCommand.setPadding(dp(10), dp(10), dp(10), dp(10));
+        recoveryCommand.setBackground(rounded(CARD, 8));
+        body.addView(recoveryCommand);
+
+        LinearLayout recoveryRow2 = row();
+        recoveryRow2.addView(action("复制 SSH 信息", () -> copyRecovery()), weight());
+        recoveryRow2.addView(action("换新令牌", () -> host.rotateRecoveryToken()), weight());
+        body.addView(recoveryRow2);
+        body.addView(toggle("harness 连续失败后自动进入恢复模式", "recoveryAuto"));
+        body.addView(hint("恢复模式不加载 harness：沙箱里只有 sshd 和一个 shell，"
+                + "用来把 profile、依赖或磁盘修回来。令牌只在本次会话有效，退出即失效。"));
 
         progress = new TextView(ctx);
         progress.setTextSize(12);
@@ -301,6 +359,60 @@ public final class Panel {
         if (awake != null) awake.setChecked(app.prefs.getBoolean("keepAwake", true));
         Switch restart = view.findViewWithTag("autoRestart");
         if (restart != null) restart.setChecked(app.prefs.getBoolean("autoRestart", true));
+
+        // Recovery.
+        boolean recovery = Recovery.active();
+        recoveryStatus.setText(Recovery.describe());
+        recoveryStatus.setTextColor(recovery ? (Recovery.sshReady() ? OK : ACCENT) : MUTED);
+        recoveryEnter.setVisibility(recovery ? View.GONE : View.VISIBLE);
+        recoveryExit.setVisibility(recovery ? View.VISIBLE : View.GONE);
+        recoveryConsole.setVisibility(recovery ? View.VISIBLE : View.GONE);
+        recoveryCommand.setVisibility(recovery ? View.VISIBLE : View.GONE);
+        recoveryCommand.setText(recovery ? recoveryText(app) : "");
+        Switch autoRecovery = view.findViewWithTag("recoveryAuto");
+        if (autoRecovery != null) autoRecovery.setChecked(Recovery.auto());
+    }
+
+    /**
+     * The block the user reads off the screen — or copies — to get in.
+     *
+     * Three routes, in the order they are worth trying: the same Wi-Fi (no cable,
+     * no computer-side setup), USB through adb (works when the phone is on
+     * mobile data), and the on-phone console for when the phone is all there is.
+     * The tunnel line is included because restarting the harness from the shell
+     * and then reaching it in a *computer's* browser is the faster repair when
+     * the phone's own WebView is the thing misbehaving.
+     */
+    private String recoveryText(App app) {
+        String lan = Recovery.lanAddress();
+        int port = Recovery.port();
+        StringBuilder text = new StringBuilder();
+        text.append("密码（本次会话有效）\n  ").append(Recovery.token()).append('\n');
+        text.append("用户 root · 端口 ").append(port).append('\n');
+        text.append("\n同一 Wi-Fi（在电脑上）\n  ")
+                .append(lan == null ? "（没有局域网地址，用下面的 USB 方式）"
+                        : RecoveryPlan.sshCommand(lan, port, "root")).append('\n');
+        text.append("\nUSB（在电脑上）\n  ").append(RecoveryPlan.adbForward(port)).append('\n');
+        text.append("  ").append(RecoveryPlan.sshCommand("127.0.0.1", port, "root")).append('\n');
+        if (lan != null) {
+            text.append("\n修好 harness 后，从电脑浏览器打开它（端口转发）\n  ")
+                    .append(RecoveryPlan.forwardCommand(lan, port, "root", app.activePort()))
+                    .append('\n');
+        }
+        text.append("\n或者直接点「手机内控制台」，在这台手机上开一个 shell。");
+        return text.toString();
+    }
+
+    private void copyRecovery() {
+        try {
+            ClipboardManager clipboard =
+                    (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) return;
+            clipboard.setPrimaryClip(ClipData.newPlainText("dsh recovery", recoveryText(App.i())));
+            Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show();
+        } catch (Throwable error) {
+            Toast.makeText(ctx, "复制失败：" + error, Toast.LENGTH_SHORT).show();
+        }
     }
 
     public void setEditing(String id) {

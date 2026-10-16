@@ -123,6 +123,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     /** Prompt waiting for a loaded page. */
     private static String pendingPrompt;
     private static final String EXTRA_PROMPT = "dsh.prompt";
+    /** The user asked for the recovery console, so the WebView may show it. */
+    private boolean consoleRequested;
+    /** The panel has already been opened by itself for this recovery session. */
+    private boolean recoveryPanelShown;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -447,7 +451,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         boolean waiting = !pageReady
                 && !panelOpen
                 && setup == null
-                && state != ServerBus.State.ERROR;
+                && state != ServerBus.State.ERROR
+                && !Recovery.active();
         int wanted = waiting ? View.VISIBLE : View.GONE;
         if (loading.getVisibility() != wanted) {
             loading.setVisibility(wanted);
@@ -598,7 +603,24 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         }
         syncConsoleVisibility(state);
         maybeExposeConsole(state);
-        if (state == ServerBus.State.RUNNING && url != null && !url.equals(loadedUrl)) {
+        if (Recovery.active()) {
+            // Recovery announces no URL: the sandbox is serving a shell, not the
+            // harness. The panel is the UI for this state, so the banner points at
+            // it. The console page loads only when asked for — replacing the
+            // screen with a terminal unasked would hide the token the other routes
+            // in (Wi-Fi, USB) need.
+            banner.setText(Recovery.sshReady()
+                    ? "恢复模式：harness 未启动，SSH 已在端口 " + Recovery.port()
+                            + " 监听。点 ≡ 看令牌与连接命令"
+                    : "正在启动恢复模式（sshd）…");
+            banner.setVisibility(View.VISIBLE);
+            String console = Recovery.consoleUrl();
+            if (consoleRequested && ServerBus.running() && !console.equals(loadedUrl)) {
+                loadedUrl = console;
+                pageReady = false;
+                web.loadUrl(console);
+            }
+        } else if (state == ServerBus.State.RUNNING && url != null && !url.equals(loadedUrl)) {
             loadedUrl = url;
             pageReady = false;
             injectBridge();
@@ -1259,7 +1281,9 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * impossible to close with one tap.
      */
     private void syncConsoleVisibility(ServerBus.State state) {
-        boolean running = state == ServerBus.State.RUNNING;
+        // Recovery reports RUNNING too — the sandbox really is serving — but the
+        // console button is the only way to the token, so it has to stay.
+        boolean running = state == ServerBus.State.RUNNING && !Recovery.active();
         if (menuButton == null) return;
         int wanted = running ? View.GONE : View.VISIBLE;
         if (menuButton.getVisibility() != wanted) {
@@ -1281,6 +1305,17 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
      * especially since it is hidden while the harness is up.
      */
     private void maybeExposeConsole(ServerBus.State state) {
+        if (Recovery.active()) {
+            // Once per recovery session: the panel holds the token and the
+            // connection commands, and the user who just lost the harness has no
+            // way to know they are there.
+            if (!recoveryPanelShown && !panelOpen && Payload.isReady()) {
+                recoveryPanelShown = true;
+                setPanelOpen(true);
+            }
+            return;
+        }
+        recoveryPanelShown = false;
         boolean stopped = state == ServerBus.State.ERROR || state == ServerBus.State.IDLE;
         boolean changed = lastState != state;
         lastState = state;
@@ -1331,6 +1366,45 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             ServerBus.start(this, Distros.active(this), App.i().prefs.getString("apiKey", ""));
             panel.refresh();
         }, 800);
+    }
+
+    @Override
+    public void enterRecovery() {
+        if (!Payload.isReady()) {
+            Toast.makeText(this, "运行时还没装好——恢复模式也要用它", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Recovery.enter("用户从面板进入");
+        consoleRequested = false;
+        loadedUrl = null;
+        restartServer();
+        panel.refresh();
+    }
+
+    @Override
+    public void exitRecovery() {
+        Recovery.exit("用户从面板退出");
+        consoleRequested = false;
+        loadedUrl = null;
+        restartServer();
+        panel.refresh();
+    }
+
+    @Override
+    public void rotateRecoveryToken() {
+        Recovery.rotateToken();
+        // The password lives in the guest's own shadow entry, so a new token only
+        // becomes real once the guest is restarted with it in the environment.
+        if (Recovery.active()) restartServer();
+        panel.refresh();
+    }
+
+    @Override
+    public void openRecoveryConsole() {
+        if (!Recovery.active()) return;
+        consoleRequested = true;
+        setPanelOpen(false);
+        render();
     }
 
     @Override

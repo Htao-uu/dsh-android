@@ -223,6 +223,19 @@ public final class BridgeServer {
         }
     }
 
+    /**
+     * Stop the sandbox and bring it back up.
+     *
+     * The 800 ms gap is the same one `/server/restart` always used: PRoot's
+     * --kill-on-exit needs a moment to reap the guest, and starting into a port
+     * the dying tree still holds is the one failure that looks random.
+     */
+    private static void restartServer() {
+        ServerBus.stop();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                () -> DshService.ensure(App.i()), 800);
+    }
+
     /** Screen size, so a caller can aim a swipe without guessing the panel size. */
     private static String screenSize() {
         android.util.DisplayMetrics metrics = App.i().getResources().getDisplayMetrics();
@@ -267,11 +280,40 @@ public final class BridgeServer {
                 respondJson(out, 200, ok("已停止"));
                 return;
             case "/server/restart":
-                ServerBus.stop();
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-                        () -> DshService.ensure(App.i()), 800);
+                restartServer();
                 respondJson(out, 200, ok("正在重启"));
                 return;
+            case "/recovery/status":
+                respondJson(out, 200, Recovery.status());
+                return;
+            case "/recovery/start": {
+                // Entering recovery is a restart: the guest's entry point (and so
+                // whether sshd exists at all) is decided when the PRoot process
+                // starts, not after.
+                if (request.has("port")) Recovery.setPort(request.optInt("port", Recovery.port()));
+                if (request.has("auto")) Recovery.setAuto(request.optBoolean("auto", Recovery.auto()));
+                Recovery.enter("桥请求");
+                restartServer();
+                JSONObject answer = Recovery.status();
+                answer.put("ok", true);
+                answer.put("message", "已进入恢复模式，正在启动 sshd");
+                respondJson(out, 200, answer);
+                return;
+            }
+            case "/recovery/stop":
+                Recovery.exit("桥请求");
+                restartServer();
+                respondJson(out, 200, ok("已退出恢复模式，正在回到 harness"));
+                return;
+            case "/recovery/token": {
+                String fresh = Recovery.rotateToken();
+                JSONObject answer = Recovery.status();
+                answer.put("ok", true);
+                answer.put("token", fresh);
+                answer.put("message", "令牌已换新；重启恢复模式后才生效");
+                respondJson(out, 200, answer);
+                return;
+            }
             case "/open-in-browser":
                 if (host != null) host.onOpenInBrowser();
                 respondJson(out, 200, ok("已交给系统浏览器"));
@@ -722,6 +764,12 @@ public final class BridgeServer {
             bridge.put("url", "http://127.0.0.1:" + port());
             bridge.put("token", token);
             root.put("bridge", bridge);
+
+            // Recovery state travels with the snapshot so the Web UI can show it
+            // too — but note that the page is only reachable when the harness is
+            // up, which is exactly when recovery is not needed. Its real consumer
+            // is the native console.
+            root.put("recovery", Recovery.status());
 
             JSONArray log = new JSONArray();
             List<String> lines = ServerBus.log();

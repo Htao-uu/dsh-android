@@ -145,8 +145,20 @@ public final class Proot {
      */
     public static Result exec(Context ctx, List<String> extraBinds, String command, long timeoutMs)
             throws IOException, InterruptedException {
+        return exec(ctx, App.i().bundledHome(), extraBinds, command, timeoutMs);
+    }
+
+    /**
+     * Same, in an explicitly named rootfs.
+     *
+     * Recovery has to touch the guest that is actually active — the bundled one
+     * normally, but a user-imported distro when that is what they booted — and
+     * re-locking root's password after a session is exactly such a call.
+     */
+    public static Result exec(Context ctx, File rootfs, List<String> extraBinds, String command,
+                              long timeoutMs) throws IOException, InterruptedException {
         App app = App.i();
-        List<String> argv = argvFor(binary(ctx), app.bundledHome(), extraBinds, command);
+        List<String> argv = argvFor(binary(ctx), rootfs, extraBinds, command);
         App.log("proot exec: " + command);
         ProcessBuilder builder = new ProcessBuilder(argv);
         Map<String, String> env = builder.environment();
@@ -209,5 +221,20 @@ public final class Proot {
      */
     public static String bundledCommand(int port) {
         return "exec /opt/dsh/android/start-dsh.sh";
+    }
+
+    /**
+     * Start command for recovery mode: a shell endpoint instead of the harness.
+     *
+     * The script itself is delivered by the hot channel, so an APK whose baked
+     * payload predates this feature would find nothing to run. Rather than exit
+     * instantly and let the watchdog restart the same broken thing forever, say
+     * what is missing and fail with a code the UI shows as an error — the one
+     * outcome that tells the user to apply an update.
+     */
+    public static String recoveryCommand() {
+        return "if [ -x /opt/dsh/android/recovery.sh ]; then exec /opt/dsh/android/recovery.sh; fi; "
+                + "echo 'dsh-recovery: /opt/dsh/android/recovery.sh 不存在"
+                + "（载荷或热包太旧，请先应用更新）' >&2; exit 3";
     }
 }

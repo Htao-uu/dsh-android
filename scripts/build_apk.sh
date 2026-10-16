@@ -19,7 +19,11 @@ APP_VERSION="${APP_VERSION:-$(cat "$ROOT/VERSION" 2>/dev/null || echo 1.0.0)}"
 # The code is derived from the version name, but a revision that keeps the same
 # name (assets replaced in place, "1.2.0" build 10201) needs to say so explicitly:
 # devices compare versionCode, so without a bump they see no update at all.
-APP_CODE="${APP_CODE:-$(echo "$APP_VERSION" | awk -F. '{printf "%d", $1*10000 + $2*100 + $3}')}"
+# Default comes from scripts/version.py, which reads VERSION_CODE — the formula
+# (maj*10000+min*100+patch) is only its fallback. A version re-released in place
+# has a code ahead of the formula, and a build that used the formula would ship
+# an APK older than what devices already run.
+APP_CODE="${APP_CODE:-$(python3 "$ROOT/scripts/version.py" --field code)}"
 # The sandbox runtime's own number, independent of the app version on purpose: a
 # shell release that does not touch the runtime keeps the same terminal line.
 TERMINAL_VERSION="${TERMINAL_VERSION:-$(cat "$ROOT/ROOTFS_VERSION" 2>/dev/null || echo 1)}"
@@ -47,12 +51,28 @@ echo "== 0/7 icons =="
 command -v rsvg-convert >/dev/null || { echo "need rsvg-convert (librsvg) for the icon" >&2; exit 1; }
 python3 "$ROOT/scripts/render_icon.py"
 
+# aapt2 is an x86_64 glibc binary. This device is arm64, so it runs it through
+# qemu with a staged Debian loader tree; a GitHub runner is x86_64 and runs it
+# natively. Deciding by the host architecture (AAPT2_RUNNER overrides) is what
+# makes one script work in both places — it used to hardcode qemu, so CI died
+# with "qemu-x86_64: not found" at the first resource step.
+if [ "${AAPT2_RUNNER+set}" != "set" ]; then
+  if [ "$(uname -m)" = "x86_64" ]; then AAPT2_RUNNER=""; else AAPT2_RUNNER="qemu-x86_64"; fi
+fi
+aapt2_run() {
+  if [ -n "$AAPT2_RUNNER" ]; then
+    QEMU_LD_PREFIX="${QEMU_LD_PREFIX:-/opt/android/root64}" "$AAPT2_RUNNER" "$AAPT2" "$@"
+  else
+    "$AAPT2" "$@"
+  fi
+}
+
 echo "== 1/7 resources =="
-QEMU_LD_PREFIX=/opt/android/root64 qemu-x86_64 "$AAPT2" compile --dir "$APP/res" -o "$RES_FLAT/res.zip"
+aapt2_run compile --dir "$APP/res" -o "$RES_FLAT/res.zip"
 
 echo "== 2/7 link =="
 rm -rf "$BUILD/r" && mkdir -p "$BUILD/r"
-QEMU_LD_PREFIX=/opt/android/root64 qemu-x86_64 "$AAPT2" link \
+aapt2_run link \
   -I "$ANDROID_JAR" \
   --manifest "$APP/AndroidManifest.xml" \
   --min-sdk-version 26 --target-sdk-version 28 \

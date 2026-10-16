@@ -22,6 +22,7 @@ drift into different spellings.
 Files, all at the repository root and committed:
 
     VERSION           the apk version
+    VERSION_CODE      the apk versionCode
     ROOTFS_VERSION    the terminal version
     HOT               the last hot package built here: {app, terminal, sp, hash}
 
@@ -35,6 +36,16 @@ from pathlib import Path
 
 TRACKER = "HOT"
 
+# The versionCode lives in a file, not only in an environment variable.
+#
+# `1.2.0` derives to 10200, but that version was re-released in place several
+# times (10201 … 10212) because a revision keeps its name and bumps only the
+# code. Once the counter is ahead of the formula, *any* build that falls back to
+# the formula produces an APK older than what devices already run — they stop
+# seeing updates, and the in-place install is refused as a downgrade. Recording
+# the number here is what makes APP_CODE optional instead of load-bearing.
+CODE = "VERSION_CODE"
+
 
 def _read_number(path: Path, fallback: str) -> str:
     if not path.is_file():
@@ -47,6 +58,8 @@ def read(root: Path) -> dict:
     """The current version as its parts, plus the composed strings."""
     app = _read_number(root / "VERSION", "0.0.0")
     terminal = _read_number(root / "ROOTFS_VERSION", "1")
+    recorded = _read_number(root / CODE, "").strip()
+    code = int(recorded) if recorded.isdigit() else version_code(app)
     tracker: dict = {}
     if (root / TRACKER).is_file():
         try:
@@ -64,7 +77,7 @@ def read(root: Path) -> dict:
         "hot": hot_version(app, terminal, sp),
         "full": full_version(app, terminal, sp),
         "core": f"{app}-t{terminal}",
-        "code": version_code(app),
+        "code": code,
         "tag": f"v{app}",
     }
 

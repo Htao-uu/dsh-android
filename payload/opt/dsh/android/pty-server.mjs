@@ -14,12 +14,19 @@
  * the agent's bash tool sees.
  *
  *   HTTP  GET  /health                 {ok, shell, version}
+ *         GET  /recovery               the on-phone recovery console page
  *         GET  /assets/xterm.js        vendored @xterm/xterm UMD bundle
  *         GET  /assets/xterm.css
- *         GET  /sessions               [{id, shell, cwd, title, cols, rows}]
- *         POST /sessions               {cols, rows, shell?, cwd?} -> {id}
+ *         GET  /sessions               [{id, shell, cwd, term, cols, rows}]
+ *         POST /sessions               {cols, rows, shell?, cwd?, term?} -> {id}
  *         DELETE /sessions/<id>        terminate
  *   WS    /pty?id=<id>&token=<token>   binary = pty bytes, text = JSON control
+ *         /pty?token=…&cols=&rows=&term=&reap=<seconds>
+ *                                      no id = create one for this socket
+ *
+ * `/recovery` is what the app's WebView loads when the harness cannot start: a
+ * line-mode shell that needs no harness, no session and no xterm. `term=dumb`
+ * makes the shell skip screen repainting, which is what a line mode needs.
  *
  * Auth: every route requires the token from $DSH_PTY_TOKEN (query or
  * X-Dsh-Token header). The listener binds 127.0.0.1 only; the token is there so
@@ -40,6 +47,11 @@ const DEFAULT_SHELL = process.env.DSH_PTY_SHELL ?? "/bin/bash";
 // wall of "groups: cannot find name for group ID" before the first prompt.
 const DEFAULT_ARGS = ["-i"];
 const MAX_SESSIONS = Number(process.env.DSH_PTY_MAX ?? 8);
+// How long a shell nobody is attached to may keep running. Sessions the client
+// asked for by id (POST /sessions) are never reaped — those belong to a tab.
+// Implicitly created ones are: every WebView reload used to leave a /bin/bash
+// behind, and after MAX_SESSIONS of them POST /sessions answered 429 forever.
+const REAP_MS = Number(process.env.DSH_PTY_REAP_MS ?? 90000);
 
 let pty;
 try {
@@ -74,27 +86,66 @@ function json(response, code, payload) {
   response.end(body);
 }
 
+/** A terminal name from a query string: a name, never a control character. */
+function terminalName(value) {
+  const name = String(value ?? "").trim();
+  return /^[A-Za-z0-9._+-]{1,32}$/.test(name) ? name : "xterm-256color";
+}
+
+function disarmReap(session) {
+  if (session.reap !== null) {
+    clearTimeout(session.reap);
+    session.reap = null;
+  }
+}
+
+function armReap(session) {
+  if (!session.ephemeral || session.reapMs <= 0 || session.reap !== null) return;
+  if (session.sockets.size > 0) return;
+  session.reap = setTimeout(() => {
+    session.reap = null;
+    if (session.sockets.size > 0) return;
+    try {
+      session.proc.kill();
+    } catch {
+      /* already gone */
+    }
+  }, session.reapMs);
+  // A pending reap must never be the reason the process stays awake.
+  if (typeof session.reap.unref === "function") session.reap.unref();
+}
+
 function createSession(options = {}) {
   const shell = options.shell ?? DEFAULT_SHELL;
+  const term = terminalName(options.term);
   const cols = Math.max(20, Math.min(400, Number(options.cols) || 80));
   const rows = Math.max(5, Math.min(200, Number(options.rows) || 24));
   const cwd = options.cwd ?? process.env.HOME ?? "/root";
+  const requested = Number(options.reapMs);
+  const reapMs = Number.isFinite(requested) && requested >= 0 ? requested : REAP_MS;
   const proc = pty.spawn(shell, DEFAULT_ARGS, {
-    name: "xterm-256color",
+    name: term,
     cols,
     rows,
     cwd,
     env: {
       ...process.env,
-      TERM: "xterm-256color",
-      COLORTERM: "truecolor",
+      TERM: term,
+      // COLORTERM is a promise the renderer has to keep, so only make it when
+      // there is a real emulator on the other end.
+      ...(term === "dumb" ? {} : { COLORTERM: "truecolor" }),
       LANG: process.env.LANG ?? "C.UTF-8",
       HOME: process.env.HOME ?? "/root",
       SHELL: shell
     }
   });
   const id = randomUUID();
-  const session = { id, proc, sockets: new Set(), cols, rows, shell, cwd };
+  const session = {
+    id, proc, sockets: new Set(), cols, rows, shell, cwd, term,
+    ephemeral: options.ephemeral === true,
+    reapMs: Math.max(0, reapMs),
+    reap: null
+  };
   sessions.set(id, session);
   proc.onData((data) => {
     // Output goes out as a binary frame of raw bytes. Wrapping every chunk in a
@@ -104,6 +155,7 @@ function createSession(options = {}) {
     for (const socket of session.sockets) sendFrame(socket, 0x2, payload);
   });
   proc.onExit(({ exitCode }) => {
+    disarmReap(session);
     for (const socket of session.sockets) {
       try {
         sendControl(socket, { type: "exit", code: exitCode });
@@ -115,7 +167,7 @@ function createSession(options = {}) {
     session.sockets.clear();
     sessions.delete(id);
   });
-  console.log(`android-pty: session ${id} ${shell} ${cols}x${rows} cwd=${cwd}`);
+  console.log(`android-pty: session ${id} ${shell} ${cols}x${rows} term=${term} cwd=${cwd}`);
   return session;
 }
 
@@ -146,6 +198,7 @@ const sendText = (socket, text) => sendFrame(socket, 0x1, Buffer.from(text, "utf
 const sendControl = (socket, object) => sendText(socket, JSON.stringify(object));
 
 function attach(serverSocket, session) {
+  disarmReap(session);
   session.sockets.add(serverSocket);
   let buffer = Buffer.alloc(0);
   serverSocket.on("data", (chunk) => {
@@ -209,8 +262,14 @@ function attach(serverSocket, session) {
       }
     }
   });
-  serverSocket.on("close", () => session.sockets.delete(serverSocket));
-  serverSocket.on("error", () => session.sockets.delete(serverSocket));
+  serverSocket.on("close", () => {
+    session.sockets.delete(serverSocket);
+    armReap(session);
+  });
+  serverSocket.on("error", () => {
+    session.sockets.delete(serverSocket);
+    armReap(session);
+  });
   sendControl(serverSocket, { type: "ready", id: session.id, shell: session.shell, cwd: session.cwd });
 }
 
@@ -233,6 +292,22 @@ function asset(name, type) {
 }
 
 const server = createServer((request, response) => {
+  try {
+    routeHttp(request, response);
+  } catch (error) {
+    // A malformed request line used to throw inside the request listener and
+    // take the whole service down with it. In recovery mode this service is the
+    // only way into the sandbox, so it has to survive anything a client sends.
+    console.error("android-pty: request failed:", error?.message ?? error);
+    try {
+      json(response, 400, { error: "bad request" });
+    } catch {
+      /* the response is already gone */
+    }
+  }
+});
+
+function routeHttp(request, response) {
   const url = new URL(request.url, "http://127.0.0.1");
   const path = url.pathname;
 
@@ -265,12 +340,33 @@ const server = createServer((request, response) => {
     return;
   }
 
+  if (path === "/recovery" || path === "/recovery/") {
+    // The on-phone way in when the harness is down. Served only to a caller that
+    // already holds the token, which is the same secret the page then uses for
+    // its WebSocket — no second credential, no unauthenticated page on the
+    // phone that any other app could read.
+    const page = join(HERE, "recovery-console.html");
+    if (!existsSync(page)) {
+      json(response, 404, { error: "recovery console not installed" });
+      return;
+    }
+    const body = readFileSync(page);
+    response.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "content-length": body.length,
+      "cache-control": "no-store"
+    });
+    response.end(body);
+    return;
+  }
   if (path === "/sessions" && request.method === "GET") {
     json(response, 200, {
       sessions: [...sessions.values()].map((session) => ({
         id: session.id,
         shell: session.shell,
         cwd: session.cwd,
+        term: session.term,
+        ephemeral: session.ephemeral,
         cols: session.cols,
         rows: session.rows
       }))
@@ -310,12 +406,13 @@ const server = createServer((request, response) => {
       json(response, 404, { error: "no such session" });
       return;
     }
+    disarmReap(session);
     session.proc.kill();
     json(response, 200, { ok: true });
     return;
   }
   json(response, 404, { error: "not found" });
-});
+}
 
 server.on("upgrade", (request, socket) => {
   const url = new URL(request.url, "http://127.0.0.1");
@@ -325,11 +422,17 @@ server.on("upgrade", (request, socket) => {
     socket.destroy();
     return;
   }
+  const reapParam = url.searchParams.get("reap");
   const session = url.searchParams.has("id")
     ? sessions.get(url.searchParams.get("id"))
     : createSession({
       cols: Number(url.searchParams.get("cols") ?? 80),
-      rows: Number(url.searchParams.get("rows") ?? 24)
+      rows: Number(url.searchParams.get("rows") ?? 24),
+      term: url.searchParams.get("term"),
+      // Created for this socket, so it should die with it: a stray shell per
+      // WebView reload is how the session table used to fill up.
+      ephemeral: true,
+      reapMs: reapParam === null ? undefined : Number(reapParam) * 1000
     });
   if (session === undefined) {
     socket.write("HTTP/1.1 404 Not Found\r\n\r\n");

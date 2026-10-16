@@ -85,6 +85,10 @@ sh scripts/sync_repo.sh "这次改了什么"
 | 插件（界面、提示词）、技能、`payload/opt` 里的沙箱脚本 | **热更新** | `sh scripts/release_hot.sh` | 约 1 分钟，80 KB |
 | 应用 Java 代码、资源、图标、载荷里的 rootfs（新装的包/依赖） | **应用更新** | `make_payload_zip` → `build_apk.sh` → `sh scripts/release.sh` | 约 15 分钟，143 MB |
 
+全量包也可以在 GitHub 的机器上出，不必用手机：`Actions → release-full`（手动，可 `dry_run`），
+或者先 `DSH_SLIM_ONLY=1 sh scripts/release.sh` 把 2 MB 的瘦包发出去，让它检测到"有瘦包、没有全量包"
+后自动补齐。触发条件、需要配的 Secrets、以及它踩过的坑都在 [CI.md](CI.md)。
+
 也就是说：**只改 `plugin/` 或 `payload/` 时不要碰 `VERSION`，也不要重新出 APK**。
 `release_hot.sh` 会把新热包挂到*当前*那版 release 上（APK 资产原地不动），重新生成
 `update.json` 的 `hot` 段，把 release 的 `<!-- hot-notes -->` 段落重渲染（**该应用版本下所有热包的条目，

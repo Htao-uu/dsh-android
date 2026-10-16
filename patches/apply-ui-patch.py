@@ -70,6 +70,22 @@ def patch_index(index: Path, assets: Path) -> str:
             "<head>", "<head>\n    " + VIEWPORT, 1
         )
     html = html.replace("  </head>", inject_block(assets) + "  </head>", 1)
+    # Fail closed. Every one of these is a substitution that can silently match
+    # nothing when upstream reindents or minifies index.html, and the only build
+    # check used to be "the CSS file exists" — which a *previous* run satisfies.
+    # A phone-layout patch that did not land is a build that ships a desktop
+    # layout, so say so here rather than three steps later.
+    problems = []
+    if MARKER not in html:
+        problems.append(f"{MARKER} 标记没写进去（`  </head>` 没匹配上？）")
+    if f'./assets/{CSS_NAME}' not in html:
+        problems.append(f"{CSS_NAME} 的 <link> 没写进去")
+    if f'./assets/{JS_NAME}' not in html:
+        problems.append(f"{JS_NAME} 的 <script> 没写进去")
+    if VIEWPORT not in html:
+        problems.append("viewport 没被替换（既没有 <meta name=\"viewport\"…> 也没有字面量 <head>）")
+    if problems:
+        sys.exit("error: index.html 打补丁失败 —— " + "；".join(problems))
     index.write_text(html, encoding="utf-8")
     return html
 

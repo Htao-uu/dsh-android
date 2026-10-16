@@ -229,7 +229,12 @@ public final class App extends Application {
         return ensurePtyToken();
     }
 
-    private static String randomToken() {
+    /**
+     * A per-process secret. Shared with recovery mode, which needs the same
+     * alphabet: the value it mints becomes a password typed by hand on another
+     * machine, so it must stay printable and free of shell metacharacters.
+     */
+    static String randomToken() {
         byte[] bytes = new byte[24];
         new java.security.SecureRandom().nextBytes(bytes);
         return android.util.Base64.encodeToString(bytes,

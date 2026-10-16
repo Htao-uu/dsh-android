@@ -40,6 +40,14 @@ echo "start-dsh: node=$NODE"
 "$NODE" "$DSH_INSTALL/android/repair-dsh.mjs" "$DSH_INSTALL/node_modules" 2>&1 | sed 's/^/start-dsh: /' || true
 
 
+# Recovery mode turns root's password into a one-shot token. It restores it on
+# the way out (EXIT trap) and the app tries again after the process ends, but the
+# app stops the sandbox by *killing* PRoot: no signal, no trap, and a restart 800
+# ms later can win the race. Doing it here — at the top of every *normal* boot —
+# is what makes the residue impossible to outlive one boot. Recovery mode never
+# runs this script, so this can never lock a live session's password.
+printf 'root:*\n' | chpasswd -e 2>/dev/null || true
+
 mkdir -p "$DSH_HOME/.dsh"
 
 # First run in a fresh home: seed the preinstalled profile (the app's plugin

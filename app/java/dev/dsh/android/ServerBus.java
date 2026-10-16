@@ -12,8 +12,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -46,6 +48,10 @@ public final class ServerBus {
     private static Process process;
     private static Thread pump;
     private static long startedAt;
+    /** Rootfs the current process was started in (recovery re-locks writes to it). */
+    private static File activeRootfs;
+    /** Bumped on every start, so a slow cleanup cannot touch a newer guest. */
+    private static int generation;
 
     private ServerBus() {
     }
@@ -117,7 +123,12 @@ public final class ServerBus {
 
     public static synchronized void start(Context ctx, Distros.Distro distro, String apiKey) {
         if (process != null && process.isAlive()) {
-            setState(State.RUNNING, "已在运行，忽略重复启动");
+            // Only claim RUNNING once readiness was actually observed. The 15 s
+            // watchdog calls this while a start is still in flight, and reporting
+            // RUNNING for a process that has not announced itself yet hid the
+            // difference between "coming up" and "up" — and would mask the
+            // failure counter recovery mode is driven by.
+            if (url != null) setState(State.RUNNING, "已在运行，忽略重复启动");
             return;
         }
         if (distro == null) {
@@ -129,12 +140,26 @@ public final class ServerBus {
         error = null;
         App app = App.i();
         app.clearServerLog();
-        setState(State.STARTING, "启动 " + distro.name);
+        boolean recovery = Recovery.active();
+        setState(State.STARTING, recovery
+                ? "启动恢复模式（不加载 harness）"
+                : "启动 " + distro.name);
 
         int port = app.resolveFreePort();
-        String command = distro.command == null || distro.command.trim().isEmpty()
-                ? Proot.bundledCommand(port)
-                : distro.command;
+        String command;
+        if (recovery) {
+            // Recovery wins over a hand-written distro command on purpose: this
+            // mode exists for the case where the normal start does not work, so
+            // honouring a stale custom command here would defeat it.
+            if (distro.command != null && !distro.command.trim().isEmpty()) {
+                App.log("recovery: 忽略自定义启动命令，改用 recovery.sh");
+            }
+            command = Proot.recoveryCommand();
+        } else if (distro.command == null || distro.command.trim().isEmpty()) {
+            command = Proot.bundledCommand(port);
+        } else {
+            command = distro.command;
+        }
         List<String> argv = Proot.argv(ctx, distro.root, command);
 
         ProcessBuilder builder = new ProcessBuilder(argv);
@@ -162,6 +187,15 @@ public final class ServerBus {
         env.put("DSH_ANDROID_BRIDGE_URL", "http://127.0.0.1:" + app.bridgePort());
         env.put("DSH_ANDROID_BRIDGE_TOKEN", app.ensureBridgeToken());
         env.put("DSH_ANDROID_APP", "1");
+        if (Recovery.active()) {
+            // The token is root's password inside the guest for exactly as long
+            // as this process lives: recovery.sh installs it on the way up and
+            // restores the shadow entry with a trap on the way out. Nothing about
+            // it is persisted in the guest.
+            env.put("DSH_RECOVERY_TOKEN", Recovery.token());
+            env.put("DSH_RECOVERY_PORT", String.valueOf(Recovery.port()));
+            env.put("DSH_RECOVERY_BIND", "0.0.0.0");
+        }
         Proot.applyHostEnvironment(env);
         if (apiKey != null && !apiKey.trim().isEmpty()) {
             env.put("DEEPSEEK_API_KEY", apiKey.trim());
@@ -171,7 +205,14 @@ public final class ServerBus {
         try {
             process = builder.start();
             startedAt = System.currentTimeMillis();
-            pump = new Thread(() -> pumpOutput(process), "dsh-output");
+            activeRootfs = distro.root;
+            int mine = ++generation;
+            // Captured, not read later from a mutable field: by the time this
+            // process exits, "restart the server" has usually already bumped the
+            // generation and cleared any global flag — which is exactly how the
+            // first version of this silently skipped its cleanup.
+            boolean recoveryBoot = Recovery.active();
+            pump = new Thread(() -> pumpOutput(process, mine, recoveryBoot), "dsh-output");
             pump.setDaemon(true);
             pump.start();
         } catch (Exception e) {
@@ -180,7 +221,7 @@ public final class ServerBus {
         }
     }
 
-    private static void pumpOutput(Process p) {
+    private static void pumpOutput(Process p, int mine, boolean recoveryBoot) {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8), 1 << 13);
              OutputStream raw = new FileOutputStream(App.i().serverLog, true);
@@ -209,10 +250,62 @@ public final class ServerBus {
                     if (code != 0 && !wasRunning) {
                         error = "进程退出，code=" + code + "（见日志）";
                     }
+                    if (!wasRunning && !recoveryBoot) {
+                        // A guest that died without ever announcing itself is the
+                        // only honest signal that the harness cannot start.
+                        // Recovery's own exit must not feed this counter.
+                        Recovery.noteFailure("code=" + code);
+                    }
                 }
             }
         }
         setState(state, "服务进程退出，code=" + code);
+        // Only when this is still the newest boot: if a newer one has started,
+        // either it is a normal boot (which locks the password itself on the way
+        // up — see start-dsh.sh) or a new recovery session that owns the
+        // password. Writing here then would lock the user out of a live session.
+        if (recoveryBoot && generation == mine) {
+            relockRecoveryPassword();
+        }
+    }
+
+    /**
+     * Put root's password back to "locked" once a recovery session is over.
+     *
+     * Best effort, on purpose — the guarantee lives elsewhere (see below).
+     *
+     * `recovery.sh` traps INT/TERM and re-locks on the way out, but the app stops
+     * the sandbox by killing the PRoot process and PRoot's --kill-on-exit tears
+     * the guest down with signals the shell may never get to act on. This call
+     * covers that, but it too can be missed: it only runs if the process exit is
+     * observed while no newer boot has started, and `restartServer()` starts one
+     * 800 ms later.
+     *
+     * So the thing that actually guarantees it is `start-dsh.sh`, which locks
+     * root's password at the top of every *normal* boot. Recovery mode never runs
+     * that script, so it can never fight a live session — and a device that was
+     * force-stopped mid-recovery is cleaned up the next time it starts normally.
+     *
+     * Runs on the pump thread, after the process is gone (a second PRoot writing
+     * /etc/shadow while the first is still serving is a race with no upside), and
+     * only for the generation it belongs to: a user who stops recovery and
+     * immediately starts it again must not have the *new* password locked out
+     * from under them.
+     */
+    private static void relockRecoveryPassword() {
+        final File rootfs = activeRootfs;
+        if (rootfs == null) return;
+        Thread lock = new Thread(() -> {
+            try {
+                Proot.Result result = Proot.exec(App.i(), rootfs,
+                        Collections.emptyList(), "printf 'root:*\\n' | chpasswd -e", 20000);
+                App.log("recovery: 已恢复 root 锁定（" + result.describe() + "）");
+            } catch (Throwable error) {
+                App.log("recovery: 恢复 root 锁定失败: " + error);
+            }
+        }, "recovery-relock");
+        lock.setDaemon(true);
+        lock.start();
     }
 
     private static void onLine(String line) {
@@ -223,8 +316,20 @@ public final class ServerBus {
         Matcher matcher = URL.matcher(line);
         if (matcher.find()) {
             url = matcher.group(1);
+            Recovery.noteReady();
             setState(State.RUNNING, "服务就绪: " + url);
-        } else if (state == State.STARTING && line.trim().length() > 0) {
+            return;
+        }
+        if (line.contains(Recovery.READY_MARKER)) {
+            // Recovery announces no URL: sshd is listening and that is the whole
+            // readiness condition. RUNNING here means "the sandbox is serving",
+            // not "the harness is up" — the UI checks Recovery.active() to tell
+            // the two apart, and the watchdog stops restarting either way.
+            Recovery.markSshReady();
+            setState(State.RUNNING, "恢复模式就绪: " + line.trim());
+            return;
+        }
+        if (state == State.STARTING && line.trim().length() > 0) {
             notifyListeners();
         }
     }

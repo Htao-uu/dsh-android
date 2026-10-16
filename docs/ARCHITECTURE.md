@@ -73,8 +73,44 @@ rootfs 里那份 `/root` 会被完全遮住，技能和指令只有写进 bind �
 | `POST /import` `/export` `/export/recent` | 导入 rootfs、导出文件到 Download |
 | `POST /mounts/*` | 增删挂载、SAF 选目录并解析成真实路径 |
 | `POST /shizuku/request\|exec` | Shizuku 授权与特权执行（`shiz` CLI 走这里） |
+| `GET /recovery/status` | 恢复模式状态：是否启用、实时令牌、局域网地址、三套连接命令 |
+| `POST /recovery/start\|stop` | 进入/退出恢复模式（换 guest 入口脚本，因此要重启沙箱） |
+| `POST /recovery/token` | 换一个新令牌（密码在 guest 的 shadow 里，重启恢复模式后生效） |
+
+（表里只列了主要端点；`/ball/*`、`/a11y/*`、`/haptic`、`/hot/*`、`/snapshot` 的完整字段见
+`BridgeServer.java` 与 `plugin/` 的客户端。）
 
 界面里那些"设置"其实全在这个桥上：dsh 的 Web UI 是唯一的前端，原生控制台只在服务没起来时露脸。
+
+## 恢复模式：harness 之外的第二个入口
+
+这个项目所有的修复工具原本都住在 harness 的 Web UI 里（沙箱终端是那儿的一个面板，更新、热包、
+profile 修复也都在那儿）。于是 harness 一旦起不来，用户就失去了能自救的东西 —— issue #3 与 1.1.5
+的全新安装问题都是这个形状。恢复模式是那个死锁的出口：
+
+```
+        DshService 看门狗：连续 3 次「进程退出且从未就绪」
+                              │
+                    Recovery.enter()（生成实时令牌）
+                              │
+        ServerBus 用 recovery.sh 而不是 start-dsh.sh 启动 PRoot
+                              │
+        ┌─────────────────────┴─────────────────────┐
+   sshd（0.0.0.0:8022，密码 = 令牌）        pty-server.mjs 的 /recovery 页面
+   → 电脑/同手机 SSH 客户端，完整 PTY        → 手机内的行模式控制台（TERM=dumb）
+```
+
+- 进入/退出都是**重启沙箱**：入口脚本在 PRoot 启动时就定了，做不到中途切换。
+- 就绪不看 harness 的那条 URL，而是看 guest 打印的 `dsh-recovery: ready port=… bind=… user=root
+  token-sha256=…`（`ServerBus.onLine`）；`RUNNING` 在这个状态下表示「沙箱在服务」，UI 用
+  `Recovery.active()` 区分它和「harness 起来了」。
+- 令牌是**每次进入重新生成**的，只在这个进程活着的时候是 root 的密码：guest 侧用 EXIT trap 还原
+  shadow，应用侧在进程退出后再补一次（`ServerBus.relockRecoveryPassword`）—— 因为应用停沙箱是杀
+  PRoot 进程，`--kill-on-exit` 给的是信号/强杀，脚本不一定有机会执行 trap。
+- 主机密钥是**每台设备自己生成**的（存在 bind mount 的 `/root/.dsh-recovery/`），载荷里那份
+  `/etc/ssh/ssh_host_*` 所有安装都一样，不能当身份用。
+
+细节、接口与验证步骤见 [RECOVERY.md](RECOVERY.md)。
 
 ## 插件：把安卓事实交给模型
 

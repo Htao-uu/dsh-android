@@ -15,10 +15,12 @@
 set -u
 
 # ---- 本版期望值：发布新版本时改这一段 --------------------------------------
-EXPECT_APP=1.2.0            # VERSION
-EXPECT_CODE=10200           # aapt2 --version-code（1.2.0 → 10200）
-EXPECT_PKG_HOT=1.2.0-t2-sp0 # APK 内建热包（build_apk.sh 用 --base，恒 sp0）
-EXPECT_HOT=1.2.0-t2-sp1     # 本版发布的热包（devices 应用后应看到它）
+EXPECT_APP=1.2.1            # VERSION
+EXPECT_CODE=10213           # VERSION_CODE（不是公式：1.2.0 这条线原地重发过多版）
+EXPECT_PKG_HOT=1.2.1-t2-sp0 # APK 内建热包（build_apk.sh 用 --base，恒 sp0）
+# 这一版还没发过热包，所以"应用后应看到"就是内建那份；两者相同时下面的检查
+# 会把"什么都没应用"当作正确状态（而不是当成漏更新）。
+EXPECT_HOT=1.2.1-t2-sp0
 EXPECT_MARKET_MD5=d6bb2e46139ebbd3b217bc8efbd562bc   # @local/dsh-market/client.js
 EXPECT_PNPM=12.11.2
 EXPECT_PNPM_MD5=f20469f02b54169cc9ed50abb5b80b7f  # 载荷里那份二进制的 md5（解开软链后算）
@@ -94,6 +96,13 @@ case "$PKG_HOT" in
   *) fail "内建热包版本不对" "$EXPECT_PKG_HOT" "${PKG_HOT:-<空>}" ;;
 esac
 case "$HOT_VER" in
+  "")
+    # 本版还没发过热包时，设备的正确状态就是"什么都没应用"——内建的那份就是当前版。
+    if [ "$EXPECT_HOT" = "$EXPECT_PKG_HOT" ]; then
+      pass "尚未应用热包（本版内建 $EXPECT_PKG_HOT 即当前版）"
+    else
+      manual "还没应用热包" "设置 → 安卓沙箱 → 检查更新 → 应用热更新" "应用后应变成 $EXPECT_HOT"
+    fi ;;
   "$EXPECT_HOT") pass "已应用热包 $EXPECT_HOT（设备确实吃到了这次有效更新）" ;;
   "$EXPECT_APP"-t*-sp*) manual "热包版本是 ${HOT_VER}" "设置 → 安卓沙箱 → 检查更新 → 应用热更新" "应用后应变成 $EXPECT_HOT" ;;
   *) manual "热包版本是 ${HOT_VER:-<空>}" "装 $EXPECT_APP 后进 设置 → 安卓沙箱 → 检查更新，应出现 $EXPECT_HOT" "$EXPECT_HOT" ;;
