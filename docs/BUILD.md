@@ -33,13 +33,22 @@ sh scripts/build_apk.sh            # → out/dsh-android.apk
 
 ### 载荷
 
-- `prepare_rootfs.sh`：取 `ubuntu-base` arm64 + 官方 Node tarball，把 harness 按目标平台装进去。
+- `prepare_rootfs.sh`：取 `ubuntu-base` arm64 + 官方 Node tarball，**装 guest 工具**（git / curl /
+  python3 / tmux / htop / openssh-server…），再把 harness 按目标平台装进去。
   **关键**：在 musl 主机上装 glibc 目标的依赖要显式指定平台，否则 npm 会按宿主 libc 挑预编译：
 
   ```sh
   npm i --os=linux --cpu=arm64 --libc=glibc @deepseek-ai/dsh
   ```
 
+  **guest 工具这一步只能在 arm64 主机上跑**：rootfs 里是 arm64 二进制，而 PRoot 只翻译系统调用
+  和路径、**不模拟指令集**。脚本会先看 `uname -m`，不是 aarch64 就跳过安装并说明原因；
+  随后**逐个校验** git/curl/python3/tmux/sshd 是否真的在，缺一个就直接失败 ——
+  因为载荷缺 `sshd` 的表现是「恢复模式起不来」，而不是构建报错（这一步以前是手工做的，
+  仓库脚本里没有，所以照脚本从头构建出来的载荷正好缺它）。
+  x86_64 上要构建载荷，得先挂 `qemu-aarch64-static` + binfmt。
+
+  harness 版本写在脚本里（`DSH_VERSION` 可覆盖），当前是 **`0.2.0-rc.2`**（npm 上的 `latest`）。
 - `assemble_payload.sh`：把 `payload/` 覆盖到 rootfs、装插件、播种 profile（`/opt/dsh/dsh-home-seed`）、
   应用上游补丁，最后做一遍完整性自检（缺文件直接失败）。
 
