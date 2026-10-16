@@ -72,12 +72,32 @@ GUEST_PACKAGES="git curl ca-certificates python3 tmux htop openssh-server iprout
 APT_CMD="apt-get update -qq && apt-get install -y --no-install-recommends $GUEST_PACKAGES"
 PROOT_CLI="${PROOT_CLI:-}"
 
+# chroot 要 root：沙箱里 uid 就是 0，CI 的 runner 是普通用户但 sudo 免密。
+# 少了这个前缀，普通 chroot 直接 EPERM，脚本会安静地掉进下面的"装不了"分支
+# （2026-10-16 第 3 次 CI 就是这么挂的：一切正常，只有这一步缺 sudo）。
+SUDO=""
+if [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+  SUDO="sudo"
+fi
+
+CHROOT_OK=0
+CHROOT_ERR=""
+if [ -n "$GUEST_MISSING" ]; then
+  if CHROOT_ERR=$($SUDO chroot "$ROOTFS" /bin/true 2>&1); then
+    CHROOT_OK=1
+  fi
+fi
+
 if [ -z "$GUEST_MISSING" ]; then
   echo "   已经都在（git/curl/python3/tmux/sshd），跳过安装"
-elif chroot "$ROOTFS" /bin/true 2>/dev/null; then
-  echo "   经 chroot 安装：$GUEST_PACKAGES"
-  [ -s "$ROOTFS/etc/resolv.conf" ] || cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
-  chroot "$ROOTFS" /usr/bin/env -i \
+elif [ "$CHROOT_OK" = "1" ]; then
+  echo "   经 ${SUDO:+sudo }chroot 安装：$GUEST_PACKAGES"
+  # resolv.conf 在 ubuntu-base 里可能是悬空软链 → 直接 cp 写不进去，先删再拷。
+  [ -s "$ROOTFS/etc/resolv.conf" ] || {
+    rm -f "$ROOTFS/etc/resolv.conf"
+    cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
+  }
+  $SUDO chroot "$ROOTFS" /usr/bin/env -i \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     DEBIAN_FRONTEND=noninteractive HOME=/root \
     /bin/sh -c "$APT_CMD" 2>&1 | tail -5 || echo "   ! apt 失败（下面按结果判断）"
@@ -90,11 +110,12 @@ elif [ -n "$PROOT_CLI" ] && [ -x "$PROOT_CLI" ]; then
       DEBIAN_FRONTEND=noninteractive HOME=/root \
       /bin/sh -c "$APT_CMD" 2>&1 | tail -5 || echo "   ! apt 失败（下面按结果判断）"
 else
-  echo "   ! 装不了 guest 工具（缺：$GUEST_MISSING）—— chroot 不可用，也没设 PROOT_CLI。"
+  echo "   ! 装不了 guest 工具（缺：$GUEST_MISSING）—— ${SUDO:+sudo }chroot 不可用，也没设 PROOT_CLI。"
+  echo "     chroot 报错：${CHROOT_ERR:-（无输出；sudo 不可用？）}"
   echo "     原因通常是：rootfs 在 /sdcard 这类 FUSE 上（没有可执行位），"
   echo "     或主机是 $HOST_ARCH 且没注册 binfmt（CI 见 docker/setup-qemu-action）。"
   echo "     手工装（在 app 私有存储里）："
-  echo "       chroot $ROOTFS /bin/sh -c \"$APT_CMD\""
+  echo "       ${SUDO:+sudo }chroot $ROOTFS /bin/sh -c \"$APT_CMD\""
 fi
 for tool in usr/bin/git usr/bin/curl usr/bin/python3 usr/bin/tmux usr/sbin/sshd; do
   if [ ! -e "$ROOTFS/$tool" ]; then
