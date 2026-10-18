@@ -1,0 +1,54 @@
+#!/bin/sh
+# sandbox-run: turn a bwrap-style profile into the PRoot policy markers.
+set -u
+echo "$(date) runner-args: $*" >> /sdcard/dsh-policy.log 2>/dev/null || true
+rw=""
+writable=0
+add() { if [ -z "$rw" ]; then rw="$1"; else rw="$rw:$1"; fi; }
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --)
+      shift
+      break
+      ;;
+    --bind)
+      [ $# -ge 3 ] || { echo "sandbox-run: malformed --bind" >&2; exit 125; }
+      add "$3"
+      writable=1
+      shift 3
+      ;;
+    --ro-bind)
+      [ $# -ge 3 ] || { echo "sandbox-run: malformed --ro-bind" >&2; exit 125; }
+      shift 3
+      ;;
+    --tmpfs)
+      [ $# -ge 2 ] || { echo "sandbox-run: malformed --tmpfs" >&2; exit 125; }
+      add "$2"
+      writable=1
+      shift 2
+      ;;
+    --dev|--proc)
+      shift
+      [ $# -gt 0 ] && shift
+      ;;
+    --unshare-pid|--die-with-parent)
+      shift
+      ;;
+    --*)
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+[ $# -gt 0 ] || { echo "sandbox-run: no command" >&2; exit 125; }
+export DSH_SANDBOX_POLICY=1
+if [ "$writable" -eq 1 ]; then
+  export DSH_SANDBOX_MODE=workspace-write
+  export DSH_SANDBOX_RW="$rw"
+else
+  export DSH_SANDBOX_MODE=read-only
+  export DSH_SANDBOX_RW=""
+fi
+exec "$@"
