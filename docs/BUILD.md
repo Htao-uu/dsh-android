@@ -27,6 +27,9 @@ python3 scripts/make_payload_zip.py build/rootfs-ubuntu build/payload-assets/pay
 
 # 3) 出包（自动生成 BuildInfo + hot.zip + 图标，然后签名）
 sh scripts/build_apk.sh            # → out/dsh-android.apk
+
+# 1.2.1+：把 hot.zip 烘进载荷（启动时不再重写）
+HOT_IN_PAYLOAD=1 sh scripts/build_apk.sh   # → out/dsh-android.apk
 ```
 
 ## 各步骤在做什么
@@ -60,6 +63,9 @@ sh scripts/build_apk.sh            # → out/dsh-android.apk
 
 1. `aapt2 compile` → `aapt2 link`（同时用 `--java` 生成 `R.java`）。
 2. 生成 `BuildInfo.java`（载荷 sha256 前 16 位，作为版本号）与 `hot.zip`。
+   `HOT_IN_PAYLOAD=1` 时先由 `bake_hot_into_payload.py` 把 hot 包烘进 `payload.zip`，
+   再把版本号钉在烘入前的 token 上（`PAYLOAD_VERSION_OVERRIDE` 可显式覆盖），
+   并给 `BuildInfo` 写 `HOT_IN_PAYLOAD` / `HOT_VERSION`；APK 不再带 `assets/hot.zip`。
 3. `javac`（源码 + `R.java`）→ `d8` → `classes.dex`。
 4. `pack_apk.py` 手写 zip：`resources.arsc` 必须 **STORED 且 4 字节对齐**（否则 Android 11+ 拒装），
    `.so` 用 4096 对齐，已经压缩过的载荷（zip/gz）不再二次压缩。

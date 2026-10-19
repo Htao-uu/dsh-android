@@ -176,3 +176,48 @@ addgroup（openssh 的 postinst）                                        ✓ �
 **代价**：两个名字不再共享同一份 inode。包管理器、git、harness 的原子写只需要"第二个名字"
 和"目标已存在就失败"这两条语义，所以不受影响；真依赖共享 inode 的用法（把硬链接当引用计数
 或写时复制使）在沙箱里得不到。
+
+
+## 13. `DSH_HOME` 是 harness 的 home，不是 guest 的 `$HOME`
+
+**现象**：一次启动脚本改动后，App 打开是全新 onboarding——旧会话、API key、插件全都不见了。
+数据其实没丢：`/root/.dsh` 原封不动，只是 dsh 没有去看它。
+
+**原因**：`start-dsh.sh` 里的 shell 变量 `DSH_HOME` 一直指 guest 用户目录（`/root`），
+用来拼 `$DSH_HOME/.dsh`。给 PTY 启动脚本传日志路径时，这行写成了
+`export ... DSH_HOME ...`——而 `DSH_HOME` 同时是 **dsh 自己的环境变量**，含义是
+*harness home 目录*（默认 `~/.dsh`）。于是 dsh 把 `/root` 当成自己的 home，在
+`/root/profiles`、`/root/storages` 建了一份空配置；旧数据还在 `/root/.dsh`。
+
+**修法**：
+
+- shell 变量改名 `GUEST_HOME`，不再借用 dsh 的环境变量名；
+- exec dsh 之前显式 `unset DSH_HOME`，即使将来有人再导出也不会生效；
+- 现场确认方式：用 dsh 的目录选择器打开 home（勾「显示隐藏文件」）——`.dsh` 还在就说明没丢，
+  只是 home 指错了。
+
+**规则**：任何会被 exec 进 guest 的脚本，变量名不要和 harness 认的环境变量重名；
+更要避免 `export` 一个"用户目录"给一个语义是"应用目录"的变量。
+
+## 14. 启动大头是模块解析；OTel provider 行是当前最划算的开关
+
+**实测**（Huawei ANG-AN00，Android 12，0.2.0 rootfs，复制 profile，同条件 A/B）：
+
+| 组 | 到 URL 时间 |
+|---|---|
+| base（`DSH_TELEMETRY_DISABLED=1`，otel 行仍加载） | 16.20 s / 16.71 s |
+| profile patch `- id: otel / disabled: true` | 13.30 s / 13.38 s |
+
+平均 **16.46 s → 13.34 s，约 −3.1 s（−19%）**。CPU profile 里 OTel 约 **195 个模块**，
+且只被 `dsh-otel` 和 `session-telemetry-otel` 两个入口加载，所以关掉它不影响其他插件。
+
+**host-only bundle 的结论是负的**：把 420 个 host 模块打成 2.5 MB 单文件（外加路径重写）
+能启动，但真机 A/B 比 plain 慢 **0.7–1.4 s**；minify 到 1.3 MB 也一样慢。
+单文件解析/编译成本抵消了模块解析的节省，而 profile 插件仍然动态加载。因此不接启动链。
+
+**规则**：
+
+- 想省启动时间，先看"能不能少加载一个插件/一行"，再考虑打包；
+- profile patch 是用户数据：只能**幂等追加**、写前备份、失败吞掉（repair-profile 的做法）；
+- 关 `otel` 这一行要和 `DSH_TELEMETRY_DISABLED=1` 一起用，否则 `session-telemetry-otel` 会 pending；
+- 不要再对 host-only bundle 投入生产化工作，除非出现"插件也一起打包"的新方案。

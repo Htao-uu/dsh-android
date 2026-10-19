@@ -260,9 +260,24 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         ServerBus.addListener(this);
         if (Payload.isReady()) {
             hideSetup();
-            Payload.applyHot(this);
-            DshService.ensure(this);
-            render();
+            if (ServerBus.running()) {
+                // The guest owns these files now; rewriting a user hot package
+                // under a live server would only invalidate what it loaded.
+                render();
+            } else {
+                render();
+                // Replaying a user hot package is file IO. Keep it off the
+                // frame that puts the loading cover on screen.
+                Thread hot = new Thread(() -> {
+                    Payload.applyHot(MainActivity.this);
+                    handler.post(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        DshService.ensure(MainActivity.this);
+                        render();
+                    });
+                }, "hot-apply");
+                hot.start();
+            }
         } else {
             installPayload();
         }

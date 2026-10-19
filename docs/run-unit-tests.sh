@@ -30,6 +30,41 @@ javac -nowarn -d "$OUT" \
   "$ROOT/docs/unit/dev/dsh/android/UnpackPlanTest.java" \
   "$ROOT/docs/unit/dev/dsh/android/RecoveryPlanTest.java"
 
+# --- boot script environment guard ----------------------------------------
+# DSH_HOME is the harness's own home (~/.dsh). Exporting the guest user home
+# under that name made dsh create a fresh empty home: every session and the API
+# key looked gone. Keep the shell variable named GUEST_HOME and require the
+# explicit unset before exec.
+BOOT="$ROOT/payload/opt/dsh/android/start-dsh.sh"
+PTY_HELPER="$ROOT/payload/opt/dsh/android/start-pty-after-port.sh"
+if grep -qE '(^|[[:space:]])export[^#]*DSH_HOME' "$BOOT"; then
+  echo "start-dsh.sh must not export DSH_HOME (it is the harness home)" >&2
+  exit 1
+fi
+grep -q 'unset DSH_HOME' "$BOOT" || {
+  echo "start-dsh.sh must unset DSH_HOME before exec" >&2
+  exit 1
+}
+grep -q 'GUEST_HOME' "$BOOT" || {
+  echo "start-dsh.sh should carry the guest home as GUEST_HOME" >&2
+  exit 1
+}
+if grep -q 'DSH_HOME' "$PTY_HELPER"; then
+  echo "start-pty-after-port.sh must not reference DSH_HOME" >&2
+  exit 1
+fi
+
+echo "boot environment guard passed"
+
+# --- repair-profile migration tests --------------------------------------
+# Covers the additive otel-row migration (empty [] placeholder, existing list,
+# already-present row, fresh seed copy). Skipped when node is unavailable.
+if command -v node >/dev/null 2>&1; then
+  node "$ROOT/scripts/test_repair_profile.mjs"
+else
+  echo "skip repair-profile tests (node not found)"
+fi
+
 failed=0
 for test in HotVersionTest PayloadMarkerTest UnpackPlanTest RecoveryPlanTest; do
   if ! java -cp "$OUT" "dev.dsh.android.$test"; then

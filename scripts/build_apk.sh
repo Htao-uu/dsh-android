@@ -27,6 +27,12 @@ APP_CODE="${APP_CODE:-$(python3 "$ROOT/scripts/version.py" --field code)}"
 # The sandbox runtime's own number, independent of the app version on purpose: a
 # shell release that does not touch the runtime keeps the same terminal line.
 TERMINAL_VERSION="${TERMINAL_VERSION:-$(cat "$ROOT/ROOTFS_VERSION" 2>/dev/null || echo 1)}"
+# 1.2.1+: fold assets/hot.zip into the payload at build time instead of
+# rewriting ~300 files into app storage on every launch. The baked payload has
+# different bytes, so its version token is pinned to the pre-bake payload: an
+# existing install already has those files on disk and must not re-extract 1 GB.
+HOT_IN_PAYLOAD="${HOT_IN_PAYLOAD:-0}"
+PAYLOAD_VERSION_OVERRIDE="${PAYLOAD_VERSION_OVERRIDE:-}"
 APP="$ROOT/app"
 BUILD="$ROOT/build"
 OUT="$ROOT/out"
@@ -86,18 +92,47 @@ echo "== hot overlay =="
 # --base: an app build bakes in the base package of its own version, which
 # is published as plain <app> until the first hot update of that line.
 python3 "$ROOT/scripts/make_hot_zip.py" "$ROOT" "$BUILD/hot-assets/hot.zip" --base
+HOT_VERSION="$(python3 - "$BUILD/hot-assets/hot.zip" <<'PY'
+import json, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    print(json.loads(archive.read("hot.json"))["version"])
+PY
+)"
+
+if [ "$HOT_IN_PAYLOAD" = "1" ]; then
+  # Pin the pre-bake token by default: the installed tree already contains the
+  # overlay's files, so re-extracting a 1 GB payload buys nothing.
+  if [ -z "$PAYLOAD_VERSION_OVERRIDE" ]; then
+    PAYLOAD_VERSION_OVERRIDE="$(python3 - "$BUILD/payload-assets/payload.zip" <<'PY'
+import hashlib, sys
+print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest()[:16])
+PY
+)"
+    echo "   baking hot overlay into payload (version token stays $PAYLOAD_VERSION_OVERRIDE)"
+  fi
+  python3 "$ROOT/scripts/bake_hot_into_payload.py" \
+    --payload "$BUILD/payload-assets/payload.zip" \
+    --manifest "$BUILD/payload-assets/payload.manifest" \
+    --hot "$BUILD/hot-assets/hot.zip" \
+    --out-payload "$BUILD/payload-assets/payload.baked.zip" \
+    --out-manifest "$BUILD/payload-assets/payload.baked.manifest"
+  mv "$BUILD/payload-assets/payload.baked.zip" "$BUILD/payload-assets/payload.zip"
+  mv "$BUILD/payload-assets/payload.baked.manifest" "$BUILD/payload-assets/payload.manifest"
+fi
 
 echo "== update manifest =="
 python3 "$ROOT/scripts/make_update_manifest.py" "$ROOT"
 
 echo "== 3/7 javac =="
-python3 - "$BUILD/payload-assets/payload.zip" "$SRC_JAVA/dev/dsh/android/BuildInfo.java" "$APP_VERSION" "$TERMINAL_VERSION" "$APP_CODE" <<'GEN'
+python3 - "$BUILD/payload-assets/payload.zip" "$SRC_JAVA/dev/dsh/android/BuildInfo.java" "$APP_VERSION" "$TERMINAL_VERSION" "$APP_CODE" "$PAYLOAD_VERSION_OVERRIDE" "$HOT_IN_PAYLOAD" "$HOT_VERSION" <<'GEN'
 import hashlib, pathlib, sys
 archive = pathlib.Path(sys.argv[1])
-digest = hashlib.sha256(archive.read_bytes()).hexdigest()[:16]
+digest = sys.argv[6].strip() or hashlib.sha256(archive.read_bytes()).hexdigest()[:16]
 version = sys.argv[3].strip()   # version string, not a path
 terminal = sys.argv[4].strip()
 code = int(sys.argv[5])         # APP_CODE: a revision keeps the name, bumps the code
+hot_in_payload = sys.argv[7].strip() == "1"
+hot_version = sys.argv[8].strip()
 target = pathlib.Path(sys.argv[2])
 target.write_text(
     "package dev.dsh.android;\n\n"
@@ -107,10 +142,12 @@ target.write_text(
     f'    static final String APP_VERSION = "{version}";\n'
     f"    static final int APP_VERSION_CODE = {code};\n"
     f'    static final String ROOTFS_VERSION = "{terminal}";\n'
+    f"    static final boolean HOT_IN_PAYLOAD = {'true' if hot_in_payload else 'false'};\n"
+    f'    static final String HOT_VERSION = "{hot_version}";\n'
     "}\n",
     encoding="utf-8",
 )
-print(f"   app {version}, terminal t{terminal}, payload hash {digest}")
+print(f"   app {version}, terminal t{terminal}, payload token {digest}, hot-in-payload={hot_in_payload} ({hot_version})")
 GEN
 find "$SRC_JAVA" -name '*.java' > "$BUILD/sources.txt"
 # aapt2 --java wrote R.java in step 2; javac must compile it too, and the append
@@ -149,12 +186,18 @@ echo "$ASSETS" | while read -r line; do
     exit 1
   fi
 done
+# The overlay is inside the payload when HOT_IN_PAYLOAD=1; packing the
+# separate archive would only reintroduce the per-launch rewrite.
+HOT_ASSET="assets/hot.zip:$BUILD/hot-assets/hot.zip"
+if [ "$HOT_IN_PAYLOAD" = "1" ]; then
+  HOT_ASSET=""
+fi
 # shellcheck disable=SC2086
 python3 "$ROOT/scripts/pack_apk.py" "$BUILD/base.apk" "$BUILD/unsigned.apk" \
   "classes.dex:$DEX_DIR/classes.dex" \
   "lib/arm64-v8a/libproot.so:$PROOT" \
   $ASSETS \
-  "assets/hot.zip:$BUILD/hot-assets/hot.zip"
+  $HOT_ASSET
 
 echo "== 6/7 keystore =="
 if [ ! -f "$KEYSTORE" ]; then

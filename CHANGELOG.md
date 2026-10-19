@@ -21,6 +21,45 @@
 
 _1.1.3 是本文件的起点；此前的 1.1.0–1.1.2 只存在于开发过程中，没有对外发布。_
 
+## [1.2.2] - 2026-10-19
+
+### Changed
+
+- **冷启动：禁用未使用的 OTel provider 行**（约 195 个模块；真机同条件 A/B
+  16.46 s → 13.34 s，约 −3.1 s；更新后整机冷启动实测 12.17 s）。新装 profile 由 seed patch 继承；已装 profile 由
+  `repair-profile.mjs` 幂等追加 `- id: otel / disabled: true`，写前备份
+  `.bak-otel`，失败不影响启动；APK 同时带 `assets/hot.zip` 更新 `repair-profile.mjs`/`start-dsh.sh`。配合已有的 `DSH_TELEMETRY_DISABLED=1`，
+  `session-telemetry-otel` 也不会 pending。
+
+### Research
+
+- 上游 `earendil-works/pi` 已有 provider lazy-load 提交（`a7559f0`，fixes #2297），但
+  最新 npm 1.3.0 与 payload 0.87.1 仍是静态加载；本地惰性入口原型未观察到明确收益，
+  见 `docs/LAZY-PROVIDER-SDK.md`。
+
+- `otel` 行的禁用状态与恢复方式记录在 `docs/DISABLED-FEATURES.md`。
+
+- host-only bundle（420 模块 / 2.5 MB，路径重写后可启动）在真机 A/B 中反而慢
+  0.7–1.4 s；结论是不接入启动链，见 `docs/HOST-BUNDLING.md`。
+
+- **内置热包不再每次启动重写**：`assets/hot.zip` 的内容在构建时烘进 `payload.zip`，
+  启动时只重放用户自己应用过的外部热包。每次冷启动少写约 300 个文件 / 5 MiB，
+  且这步不再占用主线程。
+- 启动时的两个修复脚本（`repair-dsh` / `repair-profile`）合并为一个 Node 进程；
+  PTY 端点改为等 harness 监听后再启动，并降到最低优先级，不再和 dsh 抢启动期的 CPU。
+- 应用日志时间戳精确到毫秒（`MM-dd HH:mm:ss.SSS`），启动各阶段可以直接从日志读出来。
+
+### Fixed
+
+- **更新后看起来“会话和 API key 全丢”**：启动脚本曾把 guest 用户目录以 `DSH_HOME` 导出，
+  而 `DSH_HOME` 是 dsh 自己的 harness home 变量，dsh 于是在 `/root` 建了一份空配置。
+  旧数据一直在 `~/.dsh`；现在变量改名为 `GUEST_HOME`，并在 exec dsh 前显式 `unset DSH_HOME`。
+
+### 说明
+
+- 烘入后 `payload.zip` 的字节变了，但版本 token 沿用烘入前的值，已装设备不会重新解包 1 GB；
+  下次真正更换载荷时需要显式给新 token（见 `docs/BUILD.md`）。
+
 ## [1.2.0-t2-sp1] - 2026-10-14
 
 _1.2.0 线上的热更新包（`sp0` 是 APK 内建的那份）。它带来的东西在设备上实测过，不是空转：_

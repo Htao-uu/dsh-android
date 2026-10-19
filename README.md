@@ -1,114 +1,135 @@
-# dsh-android
+# dsh-android (fork: proot-write-policy)
 
-把 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 装进安卓手机。
+[中文](#中文) | [English](#english)
 
-**一个 APK 搞定：不需要 Termux、不需要 root、不依赖任何其他应用。** 应用自带一套 Ubuntu 运行时，
-在手机本地把 harness 跑起来，界面就是 harness 自己的 Web UI。
+## English
 
-<p align="center">
-  <img src="docs/images/main.jpg" width="30%" alt="主界面" />
-  <img src="docs/images/terminal.jpg" width="30%" alt="沙箱终端" />
-  <img src="docs/images/settings.jpg" width="30%" alt="沙箱设置" />
-</p>
+This is a fork of [itiswdwa/dsh-android](https://github.com/itiswdwa/dsh-android). The app code, UX and
+runtime packaging are upstream work; this fork changes the pieces listed below.
 
-## 这是什么
+**Current release: [1.2.2](https://github.com/Htao-uu/dsh-android/releases/tag/v1.2.2)**
 
-DeepSeek Harness 官方以 `npx @deepseek-ai/dsh web` 的形式在电脑上跑。这个项目的做法是：
-把整套运行时（Ubuntu rootfs + Node + harness 及其依赖）打进一个 APK，用 PRoot 在手机里启动它，
-再用 WebView 打开它的界面 —— 于是**手机上得到的就是原样的 harness**，不是重做的客户端。
+### Download
 
-## 能干什么
+- [`dsh-android-1.2.2.apk`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.2/dsh-android-1.2.2.apk) — versioned APK
+- [`dsh-hot.zip`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.2/dsh-hot.zip) — optional hot package
+- [All releases](https://github.com/Htao-uu/dsh-android/releases)
 
-- **完整的 Harness**：会话、工具调用、子代理、Agent Teams、workflow、计划模式、技能，和桌面端同一套代码。
-- **原生观感的设置页**：`设置 → 安卓沙箱` 直接复用 harness 的组件库与主题令牌（按钮、开关、状态点、
-  描边卡片都是原生的那几个），和「通用设置」同一个模子，深浅色自动跟随。
-- **沙箱终端**：左侧栏 `>_` 图标，沙箱里的真 PTY。带命令输入栏（中文输入法在终端里会乱灌候选，所以输入走独立输入框）、历史命令、粘贴。
-- **挂载手机文件夹**：把任意目录挂进沙箱，agent 和终端直接读写。选目录时用系统文件夹选择器。
-- **导出文件到手机**：沙箱里的文件一键复制到手机 Download，文件预览页和设置页都有入口。
-- **操作手机本身**（可选，需要 [Shizuku](https://shizuku.rikka.app/)）：内置 `shiz` 命令，以 Android shell 身份执行 ——
-  打开应用、看屏幕截图、调亮度、开关勿扰、读通知、装 APK……随附的 `phone-control` 技能会教 agent 怎么用。
-- **恢复模式**：harness 起不来时也能进沙箱 —— 连续几次启动失败后应用会自己切换到恢复模式，
-  不加载 harness，直接起来一个 SSH 服务和一个 shell（密码是每次进入时新生成的令牌）。
-  详见 [docs/RECOVERY.md](docs/RECOVERY.md)。
-- **跟随系统主题**：浅色/深色、连图标都会反色；Android 13+ 还支持主题化图标。
+Requirements: Android 10+ (arm64), WebView 116+ recommended. Version 1.2.2, versionCode 10215.
+Install with `adb install -r -d dsh-android-1.2.2.apk` (same signing key as 1.2.1; data is preserved).
 
-## 安装
+### What's new in 1.2.2
 
-**要求**：Android 8.0 以上、**arm64** 手机（绝大多数现代手机）。
+- Disabled the unused OTel provider row. On-device A/B: 16.46s -> 13.34s; full-app cold start
+  measured 12.17s (one 1.2.2 validation run: 15.53s, device variance).
+- Boot repairs: one boot-prep process, deferred PTY start, and a `DSH_HOME` guard so dsh cannot
+  create a second empty home.
+- The OTel migration is delivered to already-installed devices through the bundled hot overlay;
+  existing profiles are patched by `repair-profile.mjs` without re-extracting the payload.
 
-1. 下载 `dsh-android.apk`（见 [Releases](../../releases)；如果还没有发布包，可以按 [构建文档](docs/BUILD.md) 自己打一个），拷到手机。
-2. 在文件管理器里点它安装，按提示允许「未知来源」。
-3. 打开应用。**首次启动需要解包约 400 MB 的运行时，大约 2 分钟**（只有这一次）；
-   屏幕上会显示进度，之后每次冷启动约 5 秒。
+### What is dsh-hot.zip
 
-## 第一次用
+`dsh-hot.zip` is a **small guest-side hot overlay**, not an APK and not a full dsh/plugin update.
+It contains only two guest scripts plus the version manifest:
 
-1. **配置模型**：设置 → 模型 → 填 DeepSeek API Key（也可以用其他 OpenAI 兼容的端点）。
-   想省事的话，在 设置 → 安卓沙箱 → API Key 里填也行，它会作为环境变量注入沙箱。
-2. **选工作区**：点「选择工作区」，选一个目录，然后就能开始对话了。
-3. **（可选）授权 Shizuku**：设置 → 安卓沙箱 → Shizuku → 请求授权。
-   授权后 agent 才能操作手机本身（截图、开关应用、改设置……）。
-4. **（可选）挂载文件夹 / 共享手机存储**：设置 → 安卓沙箱 → 挂载。
-   首次会申请存储权限，授权后沙箱里的 `/sdcard` 就是你手机上的共享存储。
+- `opt/dsh/android/repair-profile.mjs` — idempotently appends `- id: otel / disabled: true` to the
+  profile patch on boot (backs up `.bak-otel`);
+- `opt/dsh/android/start-dsh.sh` — the fixed guest entry script (LF, `DSH_TELEMETRY_DISABLED=1`,
+  single boot-prep process, deferred PTY);
+- `hot.json` — hot package version `1.2.2-t3-sp4`.
 
-## 更新
+On launch the app writes these files into `/opt/dsh/android/`, so an installed device gets the OTel
+migration **without re-extracting the payload**. The 1.2.2 APK already bundles the same overlay; the
+Release asset is for manual application or old-device migration. A 1.2.1 app will not apply a
+`1.2.2-t3` hot package.
 
-分两条通道，因为代价差很多：
+### Differences from upstream
 
-| | 包含 | 体积 | 怎么做 |
-|---|---|---|---|
-| **热更新** | 插件、技能、系统提示词、沙箱脚本 | 几十 KB | 设置 → 安卓沙箱 → **检查更新** → 一键应用 |
-| **重要更新** | 外壳：界面、图标、新接口 | ~143 MB | 同上，点「前往下载」装新 APK |
+- **PRoot build**: `libproot.so` comes from [Htao-uu/proot-write-policy](https://github.com/Htao-uu/proot-write-policy)
+  (a termux/proot fork with a write-path policy for `workspace-write` on hosts without
+  bubblewrap/Landlock). `scripts/fetch-proot.sh` pins the release asset by sha256.
+- **Web frontend polyfill**: `repair-dsh.mjs` injects `AbortSignal.any` (needed by Huawei WebView 114)
+  and configures `@deepseek-ai/dsh-sandbox-local` to run commands through the policy runner.
+- **Runner**: `payload/usr/local/bin/sandbox-run` translates the sandbox provider's bwrap-style
+  profile into the `DSH_SANDBOX_*` markers enforced by the PRoot extension.
+- **Boot repairs**: `boot-prep.mjs`, deferred PTY, `DSH_HOME` guard (see `docs/FINDINGS.md` §13).
+- **OTel disabled**: seed profile patch + idempotent `repair-profile.mjs` migration.
+- `THIRD_PARTY.md` records the PRoot provenance, version and licence.
 
-应用启动后会自己检查一次，设置页里也能随时手动检查。
+### Build
 
-**不想联网也没关系**：拿到 `dsh-hot.zip` 之后放进手机的 `Download` 目录、重开应用，同样会导入。
+The full pipeline is described in `docs/BUILD.md`: assemble the Ubuntu arm64 rootfs with
+`scripts/assemble_payload.sh`, then run `scripts/build_apk.sh` with an Android SDK + JDK.
+Current releases use the fork's own signing key; changing the key means a clean install.
 
-装新 APK 是覆盖安装，**你的会话、API Key、挂载和设置都会保留**。
+### Verify
 
-## 常见问题
+```
+adb devices
+adb install -r -d dsh-android-1.2.2.apk
+adb shell am start -n dev.dsh.android/.MainActivity
+adb logcat -v threadtime | grep -E 'dsh web|127.0.0.1:3080'
+```
 
-**首次启动卡在「正在安装内置沙箱」很久？**
-正常，它在解包约 400 MB 的运行时。2 分钟左右，只做一次。请确保手机有足够空间（约 1 GB 余量）。
+### Licence
 
-**为什么抓网页失败，报 `WEB_BLOCKED_URL` / non-public IP？**
-手机开了 fake-IP 模式的代理（Clash 之类）时，所有域名都解析到 `198.18.0.0/15`，harness 的 SSRF 防护
-会按设计拒绝。让 agent 用 `bash` + `node fetch` 绕过即可 —— 附带的技能里已经写明。
+App code stays under the upstream MIT licence (`LICENSE`). The PRoot fork is GPL-2.0-or-later;
+its source is published in the repository above. Anyone distributing a build of this app must
+make that corresponding source available.
 
-**沙箱里看不到我的文件？**
-去 设置 → 安卓沙箱 → 挂载，把要用的目录加进来；或者在系统设置里授予存储权限后用 `/sdcard`。
-注意：guest 里是 Linux 路径，手机上的 `Download` 在沙箱里是 `/sdcard/Download`。
+## 中文
 
-**服务起不来 / 白屏怎么办？**
-右上角会出现 `≡` 按钮（服务没起来时它才出现），点开是控制台：能看日志、启停服务、导入 rootfs。
-如果连重启几次都起不来，用控制台里的**恢复模式**：它不加载 harness，只起来一个 SSH 和一个 shell，
-让你进沙箱把 profile、依赖或磁盘修回来 —— 面板上会给出连接命令和本次会话的令牌。
-同一 Wi-Fi 用 `ssh -p 8022 root@<手机 IP>`，插着线用 `adb forward tcp:8022 tcp:8022`，
-只有手机就点「手机内控制台」。详见 [docs/RECOVERY.md](docs/RECOVERY.md)。
+这是 [itiswdwa/dsh-android](https://github.com/itiswdwa/dsh-android) 的 fork。应用代码、交互和运行时打包来自上游；本 fork 只修改下面列出的部分。
 
-**耗电吗？**
-服务在前台服务里跑，带一个 CPU 保持唤醒的锁，好让长时间任务不被系统冻结。
-不想要的话，设置 → 安卓沙箱 → 关掉「后台保活」。不用的时候点「停止」即可。
+**当前版本：[1.2.2](https://github.com/Htao-uu/dsh-android/releases/tag/v1.2.2)**
 
-**支持哪些设备？**
-arm64（arm64-v8a）的 Android 8.0+ 设备。x86 设备、32 位设备不支持。
+### 下载
 
-## 已知限制
+- [`dsh-android-1.2.2.apk`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.2/dsh-android-1.2.2.apk)：按版本名命名的安装包
+- [`dsh-hot.zip`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.2/dsh-hot.zip)：可选热包
+- [全部 Release](https://github.com/Htao-uu/dsh-android/releases)
 
-- APK 有 143 MB —— 因为它自带一整套 Linux 运行时，这是刻意的取舍（见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)）。
-- 没有 root。需要 root 的操作做不到。
-- 非官方项目，与 DeepSeek 没有隶属关系。
+要求：Android 10+（arm64），建议 WebView 116+。版本 1.2.2，versionCode 10215。
+安装：`adb install -r -d dsh-android-1.2.2.apk`（与 1.2.1 同签名，覆盖安装保留数据）。
 
-## 反馈
+### 1.2.2 主要变化
 
-有问题或建议请开 [Issue](../../issues)。附上 设置 → 安卓沙箱 → 日志 里的内容会很有帮助。
+- 禁用未使用的 OTel provider 行。真机同条件 A/B：16.46s → 13.34s；整机冷启动实测 12.17s（1.2.2 验证一次 15.53s，存在设备波动）。
+- 启动链路修复：boot-prep 单进程、PTY 延迟启动、`DSH_HOME` 保护，避免 dsh 建第二份空 home。
+- OTel 迁移通过内置 hot overlay 送到已装设备；老 profile 由 `repair-profile.mjs` 追加补丁，无需重新解包 payload。
 
-## 许可与致谢
+### 热包（dsh-hot.zip）说明
 
-[MIT](LICENSE)。这是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（MIT）的非官方安卓移植，
-其中的品牌标识、Ubuntu、Node 及各 npm 依赖的版权归各自所有者，详见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+`dsh-hot.zip` 是 **guest 侧的小脚本热覆盖**，不是 APK，也不是完整的 dsh/插件更新。它只包含两个 guest 脚本和版本清单：
 
----
+- `opt/dsh/android/repair-profile.mjs`：启动时幂等追加 `- id: otel / disabled: true`（写前备份 `.bak-otel`）；
+- `opt/dsh/android/start-dsh.sh`：修正后的启动脚本（LF、`DSH_TELEMETRY_DISABLED=1`、boot-prep 单进程、PTY 延迟启动）；
+- `hot.json`：热包版本 `1.2.2-t3-sp4`。
 
-<sub>想自己构建、看架构设计或踩坑记录？[docs/BUILD.md](docs/BUILD.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/FINDINGS.md](docs/FINDINGS.md) · [docs/RECOVERY.md](docs/RECOVERY.md) · [docs/CI.md](docs/CI.md) · [docs/UPGRADE-DSH.md](docs/UPGRADE-DSH.md)
-· 每个版本改了什么见 [CHANGELOG.md](CHANGELOG.md)</sub>
+App 启动时会把它们写入 `/opt/dsh/android/`，因此已装设备**不重新解包 payload** 也能拿到 OTel 迁移。1.2.2 APK 内已内置同一份 overlay；Release 里的 `dsh-hot.zip` 供手动应用或旧设备迁移，1.2.1 的 App 不会应用 `1.2.2-t3` 这条线的热包。
+
+### 相对上游的差异
+
+- **PRoot**：`libproot.so` 来自 [Htao-uu/proot-write-policy](https://github.com/Htao-uu/proot-write-policy)（termux/proot 的 fork，新增写路径策略，用于没有 bubblewrap/Landlock 的 `workspace-write`）；`scripts/fetch-proot.sh` 用 sha256 固定 release 资产。
+- **前端 polyfill**：`repair-dsh.mjs` 注入 `AbortSignal.any`（华为 WebView 114 需要），并把 `@deepseek-ai/dsh-sandbox-local` 配置成走策略 runner。
+- **Runner**：`payload/usr/local/bin/sandbox-run` 把沙箱的 bwrap 风格参数翻译成 `DSH_SANDBOX_*` 标记，交由 PRoot 扩展执行。
+- **启动修复**：`boot-prep.mjs`、PTY 延迟启动、`DSH_HOME` 保护（见 `docs/FINDINGS.md` §13）。
+- **OTel 已禁用**：seed profile patch + `repair-profile.mjs` 幂等迁移。
+- `THIRD_PARTY.md` 记录 PRoot 的来源、版本与许可。
+
+### 构建
+
+完整流程见 `docs/BUILD.md`：先用 `scripts/assemble_payload.sh` 组装 Ubuntu arm64 rootfs，再用 Android SDK + JDK 跑 `scripts/build_apk.sh`。当前发布使用 fork 自己的签名密钥；换钥必须卸载重装。
+
+### 验证
+
+```
+adb devices
+adb install -r -d dsh-android-1.2.2.apk
+adb shell am start -n dev.dsh.android/.MainActivity
+adb logcat -v threadtime | grep -E 'dsh web|127.0.0.1:3080'
+```
+
+### 许可
+
+应用代码仍为上游 MIT（`LICENSE`）；PRoot fork 为 GPL-2.0-or-later，源码发布在上述仓库，分发本 app 的构建产物时须提供对应的 PRoot 源码。

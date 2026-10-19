@@ -82,6 +82,15 @@ public final class Payload {
      * incremental hot update survive a restart.
      */
     public static void applyHot(Context ctx) {
+        if (BuildInfo.HOT_IN_PAYLOAD) {
+            // The overlay is baked into assets/payload.zip at build time
+            // (scripts/bake_hot_into_payload.py). A normal launch therefore has
+            // no 300-file / ~5 MiB rewrite to do; only a package the user
+            // applied after this build still has to be replayed over it.
+            replayStoredHot(ctx);
+            discardForeignHot();
+            return;
+        }
         int fromAsset = unpackHot(ctx, null, null);
         if (fromAsset >= 0) {
             App.log("hot overlay applied: " + fromAsset + " files");
@@ -357,6 +366,7 @@ public final class Payload {
      * package is ahead of the app or the app is already ahead of it.
      */
     public static String packagedHotVersion() {
+        if (BuildInfo.HOT_IN_PAYLOAD) return BuildInfo.HOT_VERSION;
         try {
             return hotVersionOf(AssetZip.open(App.i(), HOT_ASSET));
         } catch (Throwable error) {

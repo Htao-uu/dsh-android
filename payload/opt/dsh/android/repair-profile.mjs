@@ -58,6 +58,16 @@ const RETIRED = {
 /** The patch row the app's settings page and terminal button live behind. */
 const PATCH_MARKER = "android-sandbox";
 
+/**
+ * Telemetry is opt-out for this app, and the OTel row is the single biggest
+ * module-resolution cost at boot (\~195 modules, measured on-device). DSH's
+ * DSH_TELEMETRY_DISABLED switch only disables session-telemetry-otel, so the
+ * provider row itself needs this profile patch. Appended additively for
+ * existing profiles; fresh installs get it from the seed patch.
+ */
+const TELEMETRY_ROW_ID = "otel";
+const TELEMETRY_PATCH = "- id: otel\n  disabled: true";
+
 let changed = 0;
 
 function log(line) {
@@ -191,9 +201,41 @@ function seedPatchBlock() {
 	return lines.slice(start, end).join("\n").replace(/\s+$/u, "");
 }
 
+/**
+ * Add `- id: otel / disabled: true` to the profile patch, once.
+ *
+ * The profile patch is user data, so this is additive and idempotent: an
+ * existing `id: otel` row (enabled or disabled) is left alone. The empty
+ * `[]` placeholder the harness writes is replaced rather than appended to.
+ * A backup is kept next to the file for manual recovery.
+ */
+function repairTelemetryRow() {
+	const target = join(profile, "cordis.patch.yml");
+	let text;
+	try {
+		text = readFileSync(target, "utf8");
+	} catch {
+		return;
+	}
+	if (/(^|\n)[ \t]*-[ \t]*id:[ \t]*otel\b/u.test(text)) return;
+	try {
+		copyFileSync(target, `${target}.bak-otel`);
+	} catch {
+		// A failed backup must not block the (additive) patch.
+	}
+	const withoutPlaceholder = text.replace(/^[ \t]*\[\][ \t]*\r?\n?/mu, "");
+	const base = withoutPlaceholder === "" || withoutPlaceholder.endsWith("\n")
+		? withoutPlaceholder
+		: `${withoutPlaceholder}\n`;
+	writeFileSync(target, `${base}${TELEMETRY_PATCH}\n`);
+	changed += 1;
+	log(`appended the ${TELEMETRY_ROW_ID} disable row`);
+}
+
 try {
 	repairPackageJson();
 	repairPatchFile();
+	repairTelemetryRow();
 } catch (error) {
 	log(`skipped (${error.message})`);
 }

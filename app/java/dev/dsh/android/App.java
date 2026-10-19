@@ -293,7 +293,7 @@ public final class App extends Application {
         App app = instance;
         if (app == null) return;
         try {
-            String stamp = new SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(new Date());
+            String stamp = new SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
             try (OutputStream out = new FileOutputStream(app.serverLog, true)) {
                 out.write((stamp + "  " + message + "\n").getBytes("UTF-8"));
             }

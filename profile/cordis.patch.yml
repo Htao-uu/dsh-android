@@ -10,3 +10,10 @@
 - insert:
     - id: android-sandbox
       name: 'dsh-plugin-android'
+
+# The app does not collect telemetry. Disable the OTel provider row outright:
+# DSH_TELEMETRY_DISABLED only patches session-telemetry-otel, while the provider
+# accounts for ~195 modules at boot on this device. Existing profiles get this
+# row appended by repair-profile.mjs.
+- id: otel
+  disabled: true

@@ -51,11 +51,16 @@ Android 的 `java.util.zip.ZipEntry` **没有** `getExternalAttributes()`（那�
 载荷版本号是 `payload.zip` 的 sha256 前 16 位（`BuildInfo.java`，构建时生成）。手工维护版本号
 翻过两次车 —— 用户那边还在跑旧树，而所有修复看起来都"没生效"。
 
-代价是任何改动都会触发 400 MB 重新解包，所以高频改动的小文件走独立的 `assets/hot.zip`：
+代价是任何改动都会触发 400 MB 重新解包。原先高频改动的小文件走独立的 `assets/hot.zip`，应用每次
+启动把它覆盖进 rootfs（`Payload.applyHot`）；**1.2.1 之后发布包不再这样做**：
 
-- 应用每次启动把 hot 包覆盖进 rootfs（`Payload.applyHot`）；
-- 也接受**外部热包**：`Download/dsh-hot.zip` 或 `Documents/dsh-hot.zip`，带 `hot.json` 版本戳，
-  版本不同才应用 —— 这就是"不重装 APK 也能更新"的通道；
+- 构建时 `scripts/bake_hot_into_payload.py` 把 hot 包直接烘进 `payload.zip`（`opt/ etc/ usr/` 原位合并，
+  `@home/` 合并进 `opt/dsh/dsh-home-seed/`）。启动时没有这 300 个文件 / 5 MiB 的重写，
+  `BuildInfo.HOT_IN_PAYLOAD` 让 `Payload.applyHot` 只重放用户自己应用过的包；
+- 烘入后 `payload.zip` 字节变了，`build_apk.sh` 默认把 `PAYLOAD_VERSION` 钉在烘入前的 token 上：
+  已装设备的 rootfs 里本来就有这些文件，不该为同一份内容再解 1 GB。真正更换载荷时必须去掉这个
+  override（或显式给新 token）；
+- **外部热包**仍然保留：设置页显式选择或线上下载，带 `hot.json` 版本戳，跨线包会被丢弃；
 - 包内路径必须在白名单前缀内（`opt/dsh/android/`、`opt/dsh/dsh-plugin-android/`、`etc/`、`@home/`），
   越界条目拒绝并记日志。热包是可执行内容，不能因为"来自用户"就允许它往任意路径写。
 

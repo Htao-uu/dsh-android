@@ -15,7 +15,7 @@ set -eu
 
 DSH_PORT="${DSH_PORT:-3080}"
 DSH_PTY_PORT="${DSH_PTY_PORT:-3099}"
-DSH_HOME="${HOME:-/root}"
+GUEST_HOME="${HOME:-/root}"
 DSH_INSTALL="${DSH_INSTALL:-/opt/dsh}"
 
 # Node lives in different places per distribution (distro package: /usr/bin,
@@ -33,12 +33,8 @@ if [ -z "$NODE" ]; then
 fi
 echo "start-dsh: node=$NODE"
 
-# Repair an already-installed sandbox on the way up. The rootfs cannot be written
-# by a hot package, so a fix to a file inside it has to be applied from here at
-# boot; the script is idempotent and prints only when it changes something.
-# See payload/opt/dsh/android/repair-dsh.mjs for what it fixes.
-"$NODE" "$DSH_INSTALL/android/repair-dsh.mjs" "$DSH_INSTALL/node_modules" 2>&1 | sed 's/^/start-dsh: /' || true
-
+# Boot repairs run later, in one Node process (boot-prep.mjs): repair-dsh must
+# not start before the seed copy below, and repair-profile must run after it.
 
 # Recovery mode turns root's password into a one-shot token. It restores it on
 # the way out (EXIT trap) and the app tries again after the process ends, but the
@@ -48,7 +44,7 @@ echo "start-dsh: node=$NODE"
 # runs this script, so this can never lock a live session's password.
 printf 'root:*\n' | chpasswd -e 2>/dev/null || true
 
-mkdir -p "$DSH_HOME/.dsh"
+mkdir -p "$GUEST_HOME/.dsh"
 
 # First run in a fresh home: seed the preinstalled profile (the app's plugin
 # rows) from the immutable payload copy, so user edits afterwards persist.
@@ -66,21 +62,20 @@ mkdir -p "$DSH_HOME/.dsh"
 #
 # A file gate also repairs the devices that shipped broken: `package.json` is
 # still missing there, so the next start seeds them.
-if [ ! -f "$DSH_HOME/.dsh/profiles/web/package.json" ] && [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
-  echo "start-dsh: seeding $DSH_HOME/.dsh from payload"
-  cp -a "$DSH_INSTALL/dsh-home-seed/." "$DSH_HOME/.dsh/"
+if [ ! -f "$GUEST_HOME/.dsh/profiles/web/package.json" ] && [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
+  echo "start-dsh: seeding $GUEST_HOME/.dsh from payload"
+  cp -a "$DSH_INSTALL/dsh-home-seed/." "$GUEST_HOME/.dsh/"
 fi
 
-# Top up a profile that already exists. The copy above is wholesale (and only
-# once, because the bundle list in package.json is the user's), so a build that
-# adds a bundle row or a plugin patch row would otherwise never reach an
-# installed device. This one is per file and append-only: missing files are
-# copied, missing rows are added, existing content is never rewritten, and any
-# failure is logged and ignored rather than blocking the boot.
-if [ -d "$DSH_INSTALL/dsh-home-seed" ]; then
-  "$NODE" "$DSH_INSTALL/android/repair-profile.mjs" \
-    "$DSH_INSTALL/dsh-home-seed" "$DSH_HOME" 2>&1 | sed 's/^/start-dsh: /' || true
-fi
+# Boot repairs in one Node process: repair-dsh.mjs (already-installed sandbox
+# fixes) and repair-profile.mjs (top up a profile that already exists — the
+# copy above is wholesale and only once; this one is per file and append-only,
+# so a build that adds a bundle row still reaches an installed device).
+# They used to be two node starts; on the phone each costs ~0.2 s before the
+# harness may even begin.
+"$NODE" "$DSH_INSTALL/android/boot-prep.mjs" \
+  "$DSH_INSTALL/node_modules" "$DSH_INSTALL/dsh-home-seed" "$GUEST_HOME" \
+  2>&1 | sed 's/^/start-dsh: /' || true
 
 # The plugin is app code, not user data: refresh it on every start so an app
 # update actually ships (the home itself is only seeded once, to keep sessions,
@@ -89,26 +84,29 @@ fi
 # Older builds ran with PRoot's --link2symlink, which left .l2s.* stand-ins for
 # hard links in the harness home. They are pure artifacts, and a dangling one
 # reads as a corrupt file, so clear them at startup.
-rm -f "$DSH_HOME"/.l2s.* 2>/dev/null || true
-find "$DSH_HOME" -maxdepth 3 -name '.l2s.*' -delete 2>/dev/null || true
+rm -f "$GUEST_HOME"/.l2s.* 2>/dev/null || true
+find "$GUEST_HOME" -maxdepth 3 -name '.l2s.*' -delete 2>/dev/null || true
 
 # Refresh the plugin the profile resolves. The app writes this same path
 # directly from the hot overlay; this copy covers the case where the guest
 # boots without the app having run (fresh profile, manual start).
-if [ -d "$DSH_INSTALL/dsh-plugin-android" ] && [ -d "$DSH_HOME/.dsh/profiles/web" ]; then
-  target="$DSH_HOME/.dsh/profiles/web/node_modules/dsh-plugin-android"
+if [ -d "$DSH_INSTALL/dsh-plugin-android" ] && [ -d "$GUEST_HOME/.dsh/profiles/web" ]; then
+  target="$GUEST_HOME/.dsh/profiles/web/node_modules/dsh-plugin-android"
   if [ ! -d "$target" ]; then
     mkdir -p "$(dirname "$target")"
     cp -a "$DSH_INSTALL/dsh-plugin-android" "$target"
   fi
 fi
 
+# The PTY endpoint is another Node process. Starting it before the harness
+# makes it race the expensive module-load phase for the same CPU, and the
+# terminal cannot be reached before the Web UI exists anyway. The helper waits
+# for $DSH_PORT and then starts pty-server at nice 19.
 if [ -n "${DSH_PTY_TOKEN:-}" ]; then
-  echo "start-dsh: pty endpoint on 127.0.0.1:$DSH_PTY_PORT"
-  DSH_PTY_PORT="$DSH_PTY_PORT" \
-  DSH_PTY_TOKEN="$DSH_PTY_TOKEN" \
-  DSH_PTY_SHELL="${DSH_PTY_SHELL:-/bin/bash}" \
-  "$NODE" "$DSH_INSTALL/android/pty-server.mjs" >>"$DSH_HOME/.dsh-pty.log" 2>&1 &
+  echo "start-dsh: pty endpoint will start after the harness is listening"
+  export NODE DSH_INSTALL GUEST_HOME DSH_PORT DSH_PTY_PORT DSH_PTY_TOKEN
+  export DSH_PTY_SHELL="${DSH_PTY_SHELL:-/bin/bash}"
+  "$DSH_INSTALL/android/start-pty-after-port.sh" >>"$GUEST_HOME/.dsh-pty.log" 2>&1 &
 else
   echo "start-dsh: DSH_PTY_TOKEN unset, terminal disabled"
 fi
@@ -121,6 +119,35 @@ if ! cd "$DSH_INSTALL" 2>/dev/null; then
   ls -la "$DSH_INSTALL" 2>&1 | head -20
   exit 3
 fi
+
+# DSH_HOME is the harness's own home directory (normally ~/.dsh), not the guest
+# user's $HOME. A previous revision exported the guest home under that name to
+# let the PTY helper log; dsh then used /root as its home, created a fresh empty
+# profile there, and every existing session and the API key appeared to be gone.
+# The shell variable is GUEST_HOME now; this unset is the belt to that braces.
+unset DSH_HOME
+
+# The app does not collect telemetry. The launcher reads this value at startup
+# and disables the two otel rows; without it the process resolves ~200
+# OpenTelemetry modules before doing any work (measured in the on-device V8
+# profile). It is an env-var switch, not a removed dependency: anything that
+# really wants telemetry can unset it again.
+export DSH_TELEMETRY_DISABLED=1
+
+# Optional real-device profiling: /sdcard/dsh-cpuprof-on is a switch the phone
+# can flip without rebuilding the APK. profile-stop.mjs exits after 26 s so V8
+# flushes the profile (a kill from outside would not).
+if [ -f /sdcard/dsh-cpuprof-on ]; then
+  mkdir -p /sdcard/dsh-cpuprof
+  echo "start-dsh: cpu-prof enabled -> /sdcard/dsh-cpuprof"
+  exec "$NODE" --expose-internals \
+    --cpu-prof --cpu-prof-dir=/sdcard/dsh-cpuprof \
+    --import "file://$DSH_INSTALL/android/profile-stop.mjs" \
+    "$DSH_INSTALL/node_modules/@deepseek-ai/dsh/lib/bin.js" web \
+    --no-open --host 127.0.0.1 --port "$DSH_PORT" \
+    --trusted-host "127.0.0.1:$DSH_PORT"
+fi
+
 exec "$NODE" --expose-internals \
   "$DSH_INSTALL/node_modules/@deepseek-ai/dsh/lib/bin.js" web \
   --no-open --host 127.0.0.1 --port "$DSH_PORT" \
