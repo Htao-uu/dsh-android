@@ -31,7 +31,7 @@ TERMINAL_VERSION="${TERMINAL_VERSION:-$(cat "$ROOT/ROOTFS_VERSION" 2>/dev/null |
 # rewriting ~300 files into app storage on every launch. The baked payload has
 # different bytes, so its version token is pinned to the pre-bake payload: an
 # existing install already has those files on disk and must not re-extract 1 GB.
-HOT_IN_PAYLOAD="${HOT_IN_PAYLOAD:-0}"
+HOT_IN_PAYLOAD="${HOT_IN_PAYLOAD:-1}"  # no assets/hot.zip by default (user requirement)
 PAYLOAD_VERSION_OVERRIDE="${PAYLOAD_VERSION_OVERRIDE:-}"
 APP="$ROOT/app"
 BUILD="$ROOT/build"

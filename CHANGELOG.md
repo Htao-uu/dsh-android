@@ -21,6 +21,45 @@
 
 _1.1.3 是本文件的起点；此前的 1.1.0–1.1.2 只存在于开发过程中，没有对外发布。_
 
+## [1.2.3] - 2026-10-20
+
+_应用版本升级（要装新 APK）；签名与 1.2.2 相同、versionCode 更高，覆盖安装保留会话与 API key。运行时仍是 t3，载荷 token 不变，已装设备不会重新解包。_
+
+### Added
+
+- **原生照片桥（window.DSHNative）**：附件弹层现在能显示「最近照片」，并可用原生
+  拍照 / 相册 / 文件选择器。App 按 ANDROID-BRIDGE.md 注入 `DSHNative` 的
+  `capabilities` / `recentPhotos` / `openRecent` / `pickImages` / `pickFiles`：
+  缩略图长边 ≤240、单张 ≤40 KB 的 data URL；选中的照片经 127.0.0.1 上随机端口、
+  随机令牌、5 分钟有效、只读且带 CORS/Range 的临时内容服务交给页面，不向页面暴露
+  `content://` 或任意路径。桥不存在/调用失败时插件仍按原设计隐藏该区域并回退到
+  系统文件选择器（下面的修复仍然是回退路径）。
+- **默认内置三个插件**，新装直接可用：
+  - `dsh-mobile-shell` —— App 风格的移动端外壳：抽屉导航、附件弹层（拍照 / 相册 / 文件）、App 式输入框与设置页；
+  - `dsh-archived-chat-cleanup` —— 已归档会话清理：级联子代理会话、按引用回收附件，整事务可回滚；
+  - `agnes-media` —— 注册 `generate_image` / `generate_video` 两个媒体生成工具。
+  已装设备不需要重装或重置 profile：内置 hot overlay 在启动时补齐插件文件，`repair-profile.mjs` 幂等补上 profile 的依赖与 bundle 行。
+
+### Fixed
+
+- **拍照 / 相册按钮打开的是文件管理器**：WebView 的文件选择器现在按 input 类型分流 —— `capture` 用系统相机（照片写入 MediaStore 后回传给页面）、`accept="image/*"` 用系统图片选择器（Android 13+ 的 Photo Picker，旧系统走图库），其余才是文件选择器；多选、取消与相机返回都按 WebView 的约定处理。
+
+### Changed
+
+- **内置 UI 插件基线更新到 `dsh-mobile-shell` 0.6.13**：抽屉跟手 push、右栏关闭后可立即左滑、快速切换不闪白、短促快滑更容易打开；附件弹层去掉顶部暗线、最近照片支持再次点击取消选中与横向拖选/取消、拖到边缘自动滚动、`+`→`×` 旋转动画与弹层同步、主界面 logo 保留、弹层打开时 composer 菜单可用；消息内可滚动框的纵向滚动正常且左右滑不再触发侧栏；右栏隐藏宿主两个面板图标并新增全屏开关（全屏禁手势、返回键退出全屏）。
+- **不做插件自动更新**：APK 只内置基线插件（新装/重置 profile 时生效），之后升级统一走官方插件管理器。
+
+### Fixed
+
+- **拍照照片不再写入系统相册**：拍照改为 `IS_PENDING=1` 的 MediaStore 行（图库不可见）→ 成功后复制到 App 私有 cache → 删除 MediaStore 行，临时文件供附件读取并在读取后/TTL 清理；取消与 0 字节失败都会清理，不再留下 `Pictures/dsh_*.jpg`。
+- **官方插件下载装到旧版**：pnpm 12 默认 `minimumReleaseAge=1440`（发布后 24 小时冷却），插件管理器展示的是 registry 最新版、实际 `pnpm add` 却解析到 24 小时前的旧版。现在 seed profile 与已装 profile 都写入 `minimumReleaseAge: 0`（`pnpm-workspace.yaml`，`repair-profile.mjs` 幂等迁移），官方“卸载→安装”即可装到最新发布版。
+
+### 说明
+
+- 内置热包版本 `1.2.3-t3-sp0`：这条应用线的基础热包，随 APK 内置，不是单独的更新包。
+- 1.2.2 → 1.2.3 覆盖升级：同签名、versionCode 10219 > 10215，app 私有数据（会话、API key）保留。
+- 原生桥的内容服务只监听 `127.0.0.1`，随 Activity 销毁关闭；只服务本次选择/最近照片里登记过的 URI。
+
 ## [1.2.2] - 2026-10-19
 
 ### Changed

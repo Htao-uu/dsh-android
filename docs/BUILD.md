@@ -70,8 +70,28 @@ HOT_IN_PAYLOAD=1 sh scripts/build_apk.sh   # → out/dsh-android.apk
 4. `pack_apk.py` 手写 zip：`resources.arsc` 必须 **STORED 且 4 字节对齐**（否则 Android 11+ 拒装），
    `.so` 用 4096 对齐，已经压缩过的载荷（zip/gz）不再二次压缩。
 5. `Sign.java` 只签 **v2 + v3**：v1 会重写 zip、把对齐搞坏。
+6. 默认插件：`plugin/dsh-mobile-shell`、`plugin/dsh-archived-chat-cleanup`、`plugin/agnes-media`
+   由 `make_hot_zip.py` 写到 `@home/.dsh/profiles/web/node_modules/<name>/`；全新安装由
+   `bake_hot_into_payload.py` 烘进 payload 的 seed，已装设备则由 APK 内置的 `assets/hot.zip`
+   （`make_hot_zip.py … --baked`：两个 guest 脚本 + 三个插件的最小包）在每次启动时补齐，
+   `repair-profile.mjs` 再幂等补 profile 的依赖与 bundle 行。
+   `--baked` 与默认的 `--base`（全量热包，`release_hot.sh` / CI 用）共用同一份 HOT 记账，
+   但 `--baked` 永远按 base（`sp0`）出包；`build_apk.sh` 的默认调用没有改。
 
 > 对齐断言要检查**数据偏移**，不是 local header 偏移 —— 这里错过一次，打包器自己会打脸。
+
+### 没有 Linux 构建机时（Windows 重打包）
+
+本仓库当前这条 1.2.3 就是这么出的（Linux 构建机只负责 rootfs 组装；Windows 侧不跑 Gradle）：
+
+1. 取上一版**同签名** APK 里的 `assets/payload.zip`、`assets/payload.manifest`、
+   `lib/arm64-v8a/libproot.so` 当基线；
+2. `make_hot_zip.py <repo> build/hot-assets/hot.zip --baked` 出最小热包；
+3. `bake_hot_into_payload.py` 把它烘进基线 payload / manifest；
+4. `aapt2` 重建资源与 Manifest（版本号取 `VERSION` / `VERSION_CODE`），`javac` + `d8` 重建
+   `classes.dex`，`pack_apk.py` 打包，最后用 fork 密钥签 v2+v3；
+5. **BuildInfo.PAYLOAD_VERSION 必须钉在烘焙前 payload 的 token 上**（不是烘焙后文件的 sha256），
+   否则已装设备会重新解包 1 GB 载荷。
 
 ## 提交改动
 
