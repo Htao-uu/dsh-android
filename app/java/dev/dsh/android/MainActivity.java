@@ -2,6 +2,7 @@ package dev.dsh.android;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -9,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -35,6 +37,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * The whole UI: a full-bleed WebView showing the harness, the first-run
@@ -52,6 +56,10 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     private static final int REQ_MOUNT = 0x1004;
     private static final int REQ_HOT = 0x1005;
     private static final int REQ_BALL = 0x1006;
+    /** Camera capture for `<input type=file capture>`; the photo is a temporary MediaStore row. */
+    private static final int REQ_CAMERA = 0x1007;
+    /** How long the WebView may read a captured row before the cleanup deletes it. */
+    private static final long CAPTURE_ROW_TTL_MS = 2 * 60 * 1000L;
 
     /** The palette the page last reported; null until it says anything. */
     private Boolean pageDark;
@@ -109,6 +117,12 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     private Button menuButton;
 
     private ValueCallback<Uri[]> fileCallback;
+    /** Target URI handed to the camera app, returned to the WebView once it exists. */
+    private Uri cameraOutput;
+    /** Capture rows still readable by the WebView; deleted once the TTL has passed. */
+    private final Set<Uri> captureRows = new HashSet<>();
+    /** window.DSHNative: recent photos and the native pickers (ANDROID-BRIDGE.md). */
+    private DshNativeBridge nativeBridge;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean panelOpen;
     private String loadedUrl;
@@ -304,6 +318,15 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setUserAgentString(settings.getUserAgentString() + " DshAndroid/1.0");
+        // ANDROID-BRIDGE.md's native half. This WebView only ever loads the app's
+        // own pages (the harness on 127.0.0.1 and the recovery console), so the
+        // interface is installed once here rather than per navigation. The plugin
+        // detects window.DSHNative itself: with it, the attach sheet shows the
+        // "最近照片" strip and uses the native pickers; without it (or when a call
+        // fails) it hides the strip and falls back to <input type=file>, which the
+        // file chooser above still handles.
+        nativeBridge = new DshNativeBridge(this, web);
+        web.addJavascriptInterface(nativeBridge, "DSHNative");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -368,18 +391,73 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                     fileCallback.onReceiveValue(null);
                 }
                 fileCallback = callback;
+                cameraOutput = null;
+
+                boolean multiple = params != null
+                        && params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                boolean imagesOnly = acceptsImagesOnly(params);
                 try {
-                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("*/*");
-                    if (params != null && params.getAcceptTypes() != null
-                            && params.getAcceptTypes().length > 0) {
-                        intent.putExtra(Intent.EXTRA_MIME_TYPES, params.getAcceptTypes());
+                    // 1) <input type=file capture> -> the system camera. The picture
+                    //    is written into a MediaStore row this app owns, so the
+                    //    WebView can read it back without a FileProvider.
+                    if (params != null && params.isCaptureEnabled()) {
+                        Uri target = DshNativeBridge.createCameraTarget(MainActivity.this);
+                        if (target != null) {
+                            Intent capture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                            capture.putExtra(MediaStore.EXTRA_OUTPUT, target);
+                            capture.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            cameraOutput = target;
+                            startActivityForResult(capture, REQ_CAMERA);
+                            return true;
+                        }
+                        // No writable MediaStore row (no permission, no volume):
+                        // fall through to a picker instead of opening a camera that
+                        // has nowhere to put the file.
+                        App.log("camera target unavailable; falling back to a picker");
                     }
-                    startActivityForResult(intent, REQ_FILE);
+
+                    // 2) accept only image/* -> the system photo picker, never the
+                    //    document UI (ACTION_OPEN_DOCUMENT lands in the file manager
+                    //    on most ROMs, which is what made camera/gallery inputs feel
+                    //    broken). Android 13+ has a dedicated picker; older systems
+                    //    get GET_CONTENT, which resolves to the gallery.
+                    if (imagesOnly) {
+                        Intent pick = new Intent();
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            pick.setAction(MediaStore.ACTION_PICK_IMAGES);
+                            if (multiple) {
+                                pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                                pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 20);
+                            }
+                            startActivityForResult(pick, REQ_FILE);
+                        } else {
+                            pick.setAction(Intent.ACTION_GET_CONTENT);
+                            pick.addCategory(Intent.CATEGORY_OPENABLE);
+                            pick.setType("image/*");
+                            if (multiple) {
+                                pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                            }
+                            startActivityForResult(Intent.createChooser(pick, "选择图片"), REQ_FILE);
+                        }
+                        return true;
+                    }
+
+                    // 3) everything else (accept="*/*" or no accept) -> any file.
+                    //    Deliberately no EXTRA_MIME_TYPES: the document UI must not
+                    //    inherit the previous input's filter.
+                    Intent documents = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    documents.addCategory(Intent.CATEGORY_OPENABLE);
+                    documents.setType("*/*");
+                    if (multiple) {
+                        documents.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    }
+                    startActivityForResult(documents, REQ_FILE);
                     return true;
-                } catch (ActivityNotFoundException e) {
+                } catch (ActivityNotFoundException | SecurityException error) {
+                    App.log("file chooser failed: " + error);
                     fileCallback = null;
+                    cameraOutput = null;
                     return false;
                 }
             }
@@ -1480,15 +1558,43 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        // The native bridge's pickers use their own request codes; it answers the
+        // page itself and the file-chooser path below stays untouched.
+        if (nativeBridge != null && nativeBridge.onActivityResult(requestCode, resultCode, data)) {
+            return;
+        }
         Uri uri = data == null ? null : data.getData();
+        if (requestCode == REQ_CAMERA) {
+            // The camera app returns no data when EXTRA_OUTPUT is used; the photo is
+            // the MediaStore row this app created before launching it. That row is
+            // pending (gallery-invisible) on Android 10+, and it is deleted shortly
+            // after the WebView got the bytes, so the capture never reaches the album.
+            Uri captured = cameraOutput;
+            cameraOutput = null;
+            boolean ready = resultCode == RESULT_OK && captured != null
+                    && DshNativeBridge.captureReady(this, captured);
+            if (ready) {
+                scheduleCaptureCleanup(captured);
+            } else {
+                DshNativeBridge.deleteCaptureRow(this, captured);
+                if (resultCode == RESULT_OK && captured != null) {
+                    DshNativeBridge.noteCaptureFailure(this);
+                    Toast.makeText(this, "拍照失败：没有生成照片", Toast.LENGTH_SHORT).show();
+                }
+            }
+            if (fileCallback != null) {
+                fileCallback.onReceiveValue(ready ? new Uri[]{captured} : null);
+                fileCallback = null;
+            }
+            return;
+        }
         if (requestCode == REQ_MOUNT) {
             if (resultCode == RESULT_OK && uri != null) handleMountPick(uri);
             return;
         }
         if (requestCode == REQ_FILE) {
             if (fileCallback != null) {
-                fileCallback.onReceiveValue(resultCode == RESULT_OK && uri != null
-                        ? new Uri[]{uri} : null);
+                fileCallback.onReceiveValue(chooserResult(resultCode, data));
                 fileCallback = null;
             }
             return;
@@ -1505,6 +1611,75 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             if (resultCode != RESULT_OK || uri == null) return;
             applyPickedBallImage(uri);
         }
+    }
+
+    /**
+     * Is this picker images-only?
+     *
+     * <input type=file accept="image/*"> has to end up in the photo picker:
+     * ACTION_OPEN_DOCUMENT would put it behind the document UI, which on most ROMs
+     * is the file manager rather than the gallery — the bug this routing exists to
+     * fix. An empty or mixed accept list stays on the document picker on purpose.
+     */
+    private static boolean acceptsImagesOnly(WebChromeClient.FileChooserParams params) {
+        if (params == null) return false;
+        String[] accepts = params.getAcceptTypes();
+        if (accepts == null || accepts.length == 0) return false;
+        boolean sawOne = false;
+        for (String accept : accepts) {
+            if (accept == null) continue;
+            String value = accept.trim();
+            if (value.isEmpty()) continue;
+            sawOne = true;
+            if (!value.startsWith("image/")) return false;
+        }
+        return sawOne;
+    }
+
+    /**
+     * Delete a capture row after the WebView has had time to read it.
+     *
+     * The row itself is created by {@link DshNativeBridge#createCameraTarget} and
+     * is pending (gallery-invisible) on Android 10+. The WebView needs the
+     * content:// URI alive while it copies the bytes out of the file input, so the
+     * cleanup cannot run immediately; two minutes is far longer than that copy and
+     * short enough that an attached photo never lingers on the phone. A row the
+     * user cancelled is deleted at once, before it can become a 0-byte album entry.
+     */
+    private void scheduleCaptureCleanup(Uri uri) {
+        if (uri == null) return;
+        captureRows.add(uri);
+        handler.postDelayed(() -> {
+            captureRows.remove(uri);
+            DshNativeBridge.deleteCaptureRow(this, uri);
+        }, CAPTURE_ROW_TTL_MS);
+    }
+
+    /**
+     * Picker result as the WebView's array: multiple items come back through
+     * ClipData, a single one through data.getData(). null means "nothing picked",
+     * which the page treats as a cancelled file input.
+     */
+    private static Uri[] chooserResult(int resultCode, Intent data) {
+        if (resultCode != RESULT_OK || data == null) return null;
+        ClipData clip = data.getClipData();
+        if (clip != null) {
+            Uri[] result = new Uri[clip.getItemCount()];
+            int count = 0;
+            for (int index = 0; index < clip.getItemCount(); index++) {
+                Uri item = clip.getItemAt(index).getUri();
+                if (item != null) result[count++] = item;
+            }
+            if (count == 0) return null;
+            if (count != result.length) {
+                Uri[] trimmed = new Uri[count];
+                System.arraycopy(result, 0, trimmed, 0, count);
+                return trimmed;
+            }
+            return result;
+        }
+        Uri single = data.getData();
+        return single == null ? null : new Uri[]{single};
     }
 
     /**
@@ -1648,6 +1823,14 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
 
     @Override
     protected void onDestroy() {
+        for (Uri row : captureRows) {
+            DshNativeBridge.deleteCaptureRow(this, row);
+        }
+        captureRows.clear();
+        if (nativeBridge != null) {
+            nativeBridge.destroy();
+            nativeBridge = null;
+        }
         ServerBus.removeListener(this);
         if (live == this) live = null;
         super.onDestroy();
