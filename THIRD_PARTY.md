@@ -29,6 +29,30 @@
 `/restart`·`/rollback`·`/backup`·`/restore`·`/approve-builds` 等写能力）见
 [`docs/preinstalled-plugins.md`](docs/preinstalled-plugins.md)。
 
+## 内置默认插件（vendor）
+
+APK 默认启用以下三个插件：`profile/package.json` 的 `dependencies` + `dsh.profile.bundles`
+预置它们，已装设备的 profile 由 `payload/opt/dsh/android/repair-profile.mjs` 在下次启动时
+幂等补行。三个插件的**运行时文件按上游发布物原样** vendored 在 `plugin/<name>/`
+（不带 test/docs/dev 文件），热包把它们写到 guest 的
+`@home/.dsh/profiles/web/node_modules/<name>/`。
+
+三者都不需要额外的第三方运行时依赖：host 半只用 node 内置模块与 `@deepseek-ai/*`
+（harness 运行时提供），client 半只用 Web client 运行时提供的 `react` / `@deepseek-ai/*`
+（与仓库内 `dsh-plugin-android` 同一模式），所以 vendor 目录里没有它们自己的
+`node_modules`。
+
+| 插件 | 版本 | 来源 | 许可 |
+|---|---|---|---|
+| `dsh-mobile-shell` | 0.6.13 | [Htao-uu/dsh-mobile-shell](https://github.com/Htao-uu/dsh-mobile-shell)（作者 Htao-uu，DSH 手机壳 UI） | MIT |
+| `dsh-archived-chat-cleanup` | 1.0.0 | [Htao-uu/dsh-archived-chat-cleanup](https://github.com/Htao-uu/dsh-archived-chat-cleanup)（作者 Htao-uu，已归档会话清理） | MIT |
+| `agnes-media` | 1.8.3 | 上游 [LittleBeaverStudio/agnes-media](https://github.com/LittleBeaverStudio/agnes-media)（Copyright (c) 2026 LittleBeaverStudio，Agnes 图片/视频生成工具） | MIT |
+
+每个 `plugin/<name>/LICENSE` 都保留了上游的版权声明。`agnes-media` 是**联网**插件：调用时
+会向默认端点 `https://apihub.agnes-ai.cn/v1`（可用 `AGNES_MEDIA_BASE_URL` 覆盖）发请求，
+密钥读 `AGNES_MEDIA_API_KEY` / `AGNES_API_KEY`（或 DSH credentials），未配置时工具返回
+可读错误而不是发请求。这是插件自身的运行时行为，本发行版只负责预装它。
+
 ## 构建时下载
 
 | 内容 | 来源 | 许可 |

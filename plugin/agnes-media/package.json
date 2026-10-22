@@ -1,0 +1,34 @@
+{
+  "name": "agnes-media",
+  "version": "1.8.3",
+  "description": "Registers generate_image and generate_video tools for Agnes AI media models (agnes-image-2.5-flash, agnes-video-2.5-flash) in DeepSeek Harness. Supports multi-image reference via reference_image_urls.",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "agnes",
+    "image-generation",
+    "video-generation",
+    "tools"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "dsh-mobile-shell",
+  "version": "0.6.13",
+  "private": false,
+  "description": "DeepSeek App-style mobile shell for the DSH Web UI: drawer navigation, app-like composer and settings, Android back stack.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "mobile",
+    "deepseek",
+    "web-ui",
+    "drawer",
+    "android"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Htao-uu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Htao-uu/dsh-mobile-shell.git"
+  },
+  "homepage": "https://github.com/Htao-uu/dsh-mobile-shell#readme",
+  "bugs": {
+    "url": "https://github.com/Htao-uu/dsh-mobile-shell/issues"
+  }
+}

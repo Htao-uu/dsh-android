@@ -99,3 +99,20 @@ _Install only plugins you trust: they run with your permissions and can damage D
 - **不用这个市场**：把它从 profile 的 `dsh.profile.bundles` 里去掉即可（`node_modules` 里的文件留着不影响）。
   去掉后市场界面与它的全部服务都不会加载，目录也不会被请求。
 - **只装你信得过的插件**：目录里的插件是第三方代码，安装等于让它在你的设备上以你的权限运行。
+## 7. 另外三个默认内置插件（1.2.3 起）
+
+从 1.2.3 起，APK 还默认内置并按 bundle 启用三个插件。它们和上面的市场一样，**代码随应用走、离线可用**，
+来源与许可见 [THIRD_PARTY.md](../THIRD_PARTY.md)「内置默认插件（vendor）」一节。
+
+| 插件 | 版本 | 做什么 | 联网吗 |
+|---|---|---|---|
+| `dsh-mobile-shell` | 0.6.13 | App 风格的移动端外壳：抽屉导航（跟手 push）、附件弹层（拍照 / 相册 / 文件 / 最近照片连选）、App 式输入框与设置页、右栏全屏 | 不联网 |
+| `dsh-archived-chat-cleanup` | 1.0.0 | 删除已归档会话：级联子代理会话、按引用回收附件，整事务可回滚 | 不联网（只操作本机会话数据） |
+| `agnes-media` | 1.8.3 | 注册 `generate_image` / `generate_video` 两个媒体生成工具（Agnes AI 模型） | **会联网**：默认请求 `https://apihub.agnes-ai.cn/v1` |
+
+`agnes-media` 的说明：
+
+- 端点可用环境变量 `AGNES_MEDIA_BASE_URL` 覆盖；密钥读 `AGNES_MEDIA_API_KEY` / `AGNES_API_KEY`（或 DSH credentials）。**没配置密钥时工具返回一条可读错误，不会发出请求**。
+- 只有你（或 agent）实际调用生成工具时才会联网；插件加载本身不联网。
+
+**不想用其中某个？** 从 profile 的 `dsh.profile.bundles` 里去掉它对应的行，然后重启 Harness 即可；`node_modules` 里的文件留着不影响其它功能。**想升级？** 它们随 APK 内置（内置热包在每次启动时补齐），也可以通过热更新包替换；版本号在设置页的版本信息里能看到。

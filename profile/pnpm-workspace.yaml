@@ -3,3 +3,11 @@ packages:
 
 nodeLinker: hoisted
 autoInstallPeers: false
+
+# pnpm 12 waits 24 hours after a version is published before `pnpm add` may
+# install it (`minimumReleaseAge` defaults to 1440 minutes). The plugin
+# manager's update check asks the registry directly, so it offered a plugin
+# published that day and then installed the previous day's version: "install"
+# must install the newest published version, so the wait is off for this
+# profile. Existing profiles get the same line from repair-profile.mjs.
+minimumReleaseAge: 0

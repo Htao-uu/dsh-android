@@ -23,6 +23,8 @@ function setup(name, patchText) {
   mkdirSync(profile, { recursive: true });
   writeFileSync(join(seed, "profiles", "web", "cordis.patch.yml"), "- insert:\n    - id: android-sandbox\n      name: 'dsh-plugin-android'\n");
   writeFileSync(join(seed, "profiles", "web", "package.json"), JSON.stringify({ dependencies: {}, dsh: { profile: { bundles: [] } } }, null, 2) + "\n");
+  writeFileSync(join(seed, "profiles", "web", "pnpm-workspace.yaml"),
+    "packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\nminimumReleaseAge: 0\n");
   if (patchText !== undefined) writeFileSync(join(profile, "cordis.patch.yml"), patchText);
   return { root, seed, home, profile, patch: join(profile, "cordis.patch.yml") };
 }
@@ -83,6 +85,48 @@ async function main() {
     const text = readFileSync(t.patch, "utf8");
     check("seed patch copied", text.includes("android-sandbox"));
     check("seed telemetry row preserved", count(text, "- id: otel") === 1, JSON.stringify(text));
+  }
+
+  // 5. an existing pnpm-workspace.yaml gains minimumReleaseAge: 0, exactly once
+  {
+    const t = setup("pnpm-settings-append", undefined);
+    const file = join(t.profile, "pnpm-workspace.yaml");
+    writeFileSync(file, "packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n");
+    await run(t.seed, t.home);
+    const first = readFileSync(file, "utf8");
+    check("release age disabled", count(first, "minimumReleaseAge:") === 1 && /minimumReleaseAge:\s*0/.test(first), JSON.stringify(first));
+    await run(t.seed, t.home);
+    const second = readFileSync(file, "utf8");
+    check("release-age repair idempotent", first === second && count(second, "minimumReleaseAge:") === 1, JSON.stringify(second));
+  }
+
+  // 6. a release age the user set is left alone
+  {
+    const t = setup("pnpm-settings-user", undefined);
+    const file = join(t.profile, "pnpm-workspace.yaml");
+    const original = "packages:\n  - .\nminimumReleaseAge: 1440\n";
+    writeFileSync(file, original);
+    await run(t.seed, t.home);
+    check("user release age untouched", readFileSync(file, "utf8") === original, JSON.stringify(readFileSync(file, "utf8")));
+  }
+
+  // 7. no profile file at all: the seed copy carries the setting
+  {
+    const t = setup("pnpm-settings-seeded", undefined);
+    const file = join(t.profile, "pnpm-workspace.yaml");
+    await run(t.seed, t.home);
+    const text = readFileSync(file, "utf8");
+    check("seed pnpm settings copied", text.includes("minimumReleaseAge: 0"), JSON.stringify(text));
+  }
+
+  // 8. neither seed nor profile file: a minimal one is written
+  {
+    const t = setup("pnpm-settings-created", undefined);
+    rmSync(join(t.seed, "profiles", "web", "pnpm-workspace.yaml"));
+    const file = join(t.profile, "pnpm-workspace.yaml");
+    await run(t.seed, t.home);
+    const text = readFileSync(file, "utf8");
+    check("pnpm settings created", text.includes("minimumReleaseAge: 0"), JSON.stringify(text));
   }
 }
 

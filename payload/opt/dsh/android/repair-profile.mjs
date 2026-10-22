@@ -35,6 +35,9 @@ const seedProfile = join(seed, "profiles", "web");
  * `payload/home/.dsh/profiles/web/node_modules/@local/`.
  */
 const BUNDLES = {
+	"dsh-mobile-shell": "file:./node_modules/dsh-mobile-shell",
+	"dsh-archived-chat-cleanup": "file:./node_modules/dsh-archived-chat-cleanup",
+	"agnes-media": "file:./node_modules/agnes-media",
 	"dshmarket": "file:./node_modules/dshmarket",
 	"@local/agent-browser-viewer": "file:./node_modules/@local/agent-browser-viewer",
 	"@local/dsh-ball-summarizer": "file:./node_modules/@local/dsh-ball-summarizer"
@@ -67,6 +70,27 @@ const PATCH_MARKER = "android-sandbox";
  */
 const TELEMETRY_ROW_ID = "otel";
 const TELEMETRY_PATCH = "- id: otel\n  disabled: true";
+
+/**
+ * Let pnpm install a version the day it is published.
+ *
+ * pnpm 12 ships with this app and its `minimumReleaseAge` defaults to 1440
+ * minutes: a version younger than a day is invisible to `pnpm add`, while the
+ * plugin manager's update check (`pnpm view`) still reports the newest release.
+ * The visible symptom is a plugin the manager offers as 0.6.12 that installs as
+ * the previous day's 0.6.4. The manager passes no release-age flag — and pnpm
+ * 12's standalone CLI silently ignores `--config.minimum-release-age` — so the
+ * profile's own pnpm settings are the one place to turn it off without touching
+ * the plugin manager: `minimumReleaseAge: 0` in `pnpm-workspace.yaml`.
+ */
+const PNPM_SETTINGS = `# pnpm 12 waits a day after a publish before it installs a version
+# (\`minimumReleaseAge\` defaults to 1440 minutes). The plugin manager's update
+# check reads the registry directly, so it offered a release that \`pnpm add\`
+# then refused and the install fell back to the previous version. Off for this
+# profile: "install" should install the newest published version
+# (repair-profile.mjs adds this line to profiles seeded before this build).
+minimumReleaseAge: 0
+`;
 
 let changed = 0;
 
@@ -157,6 +181,30 @@ function repairPackageJson() {
 	changed += 1;
 }
 
+/** pnpm-workspace.yaml: let `pnpm add` see releases younger than a day. */
+function repairPnpmSettings() {
+	const target = join(profile, "pnpm-workspace.yaml");
+	const hasSetting = /(^|\n)[ \t]*minimumReleaseAge[ \t]*:/u;
+	let text;
+	try {
+		text = readFileSync(target, "utf8");
+	} catch {
+		if (seedFile("pnpm-workspace.yaml")) return;
+		mkdirSync(profile, { recursive: true });
+		writeFileSync(target, PNPM_SETTINGS);
+		changed += 1;
+		log("created pnpm-workspace.yaml with minimumReleaseAge: 0");
+		return;
+	}
+	if (hasSetting.test(text)) return;
+	// Append at column zero so the line is a top-level setting, not part of the
+	// last block (the seed ends with `autoInstallPeers: false`, a plain mapping).
+	const base = text === "" || text.endsWith("\n") ? text : `${text}\n`;
+	writeFileSync(target, `${base}${text === "" ? "" : "\n"}${PNPM_SETTINGS}`);
+	changed += 1;
+	log("disabled pnpm's release age (minimumReleaseAge: 0)");
+}
+
 /** cordis.patch.yml: the app's plugin row, appended verbatim from the seed. */
 function repairPatchFile() {
 	if (seedFile("cordis.patch.yml")) return;
@@ -234,6 +282,7 @@ function repairTelemetryRow() {
 
 try {
 	repairPackageJson();
+	repairPnpmSettings();
 	repairPatchFile();
 	repairTelemetryRow();
 } catch (error) {

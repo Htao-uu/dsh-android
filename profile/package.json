@@ -3,6 +3,9 @@
   "private": true,
   "dependencies": {
     "dsh-plugin-android": "file:./node_modules/dsh-plugin-android",
+    "dsh-mobile-shell": "file:./node_modules/dsh-mobile-shell",
+    "dsh-archived-chat-cleanup": "file:./node_modules/dsh-archived-chat-cleanup",
+    "agnes-media": "file:./node_modules/agnes-media",
     "dshmarket": "file:./node_modules/dshmarket",
     "@local/agent-browser-viewer": "file:./node_modules/@local/agent-browser-viewer",
     "@local/dsh-ball-summarizer": "file:./node_modules/@local/dsh-ball-summarizer"
@@ -12,6 +15,9 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
+        "dsh-mobile-shell",
+        "dsh-archived-chat-cleanup",
+        "agnes-media",
         "dshmarket",
         "@local/agent-browser-viewer",
         "@local/dsh-ball-summarizer"

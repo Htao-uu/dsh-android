@@ -1,0 +1,6 @@
+# dsh-mobile-shell bundle patch: one host row + one browser client.
+# The browser half is discovered through package.json dsh.client;
+# the host half exists only so the row is present in the Loader.
+- insert:
+    - id: dsh-mobile-shell
+      name: 'dsh-mobile-shell'
