@@ -43,6 +43,12 @@ import java.util.Map;
 final class AssetServer {
 
     private static final long TTL_MS = 5 * 60 * 1000L;
+    /**
+     * How long a capture stays downloadable after the page fetched it once. The
+     * grace window covers a second request (HEAD before GET, a retried GET, Range)
+     * without turning it into a 404; the bridge TTL is the backstop.
+     */
+    private static final long ONESHOT_GRACE_MS = 60 * 1000L;
     private static final int MAX_HEADER_BYTES = 16 * 1024;
     private static final char[] HEX = "0123456789abcdef".toCharArray();
 
@@ -60,8 +66,13 @@ final class AssetServer {
         final String mime;
         final long size;
         final long expiresAt;
-        /** True for an app-private capture copy: deleted as soon as it was served. */
+        /** True for an app-private capture: deleted a grace period after it was served. */
         final boolean oneShot;
+        /** Requests seen for this token, for the diagnostics line. */
+        int requests;
+        int gets;
+        /** Set once the one-shot cleanup was scheduled, so it happens once. */
+        boolean cleanupScheduled;
 
         Asset(Uri uri, String name, String mime, long size, long expiresAt, boolean oneShot) {
             this.uri = uri;
@@ -87,17 +98,19 @@ final class AssetServer {
         String token = token();
         assets.put(token, new Asset(uri, name, mime, size,
                 SystemClock.elapsedRealtime() + TTL_MS, false));
+        App.log("asset: published token=" + shortToken(token) + " name=" + name
+                + " mime=" + mime + " size=" + size + " oneShot=false");
         return "http://127.0.0.1:" + port + "/asset/" + token;
     }
 
     /**
      * Publish a private capture file and forget it after the page fetched it.
      *
-     * A capture is copied into the app's own cache before the MediaStore row is
-     * deleted, so there is no provider URI left to hand out; a plain
-     * {@code file://} URI is enough here. The copy is removed once its bytes have
-     * been sent (with the 10 minute bridge TTL as the safety net), so a photo the
-     * user only attached to a message never stays on the phone.
+     * A capture lives in the app's own cache behind a {@link CaptureProvider} URI;
+     * the camera wrote that file directly, so a plain {@code file://} URI is enough
+     * here. The file is removed a grace period after the page fetched it (with the
+     * 10 minute bridge TTL as the safety net), so a photo the user only attached to
+     * a message never stays on the phone.
      */
     synchronized String publishFile(File file, String name, String mime, long size) {
         if (file == null) return null;
@@ -106,6 +119,9 @@ final class AssetServer {
         String token = token();
         assets.put(token, new Asset(Uri.fromFile(file), name, mime, size,
                 SystemClock.elapsedRealtime() + TTL_MS, true));
+        App.log("asset: published token=" + shortToken(token) + " name=" + name
+                + " mime=" + mime + " size=" + size + " oneShot=true file="
+                + file.getAbsolutePath());
         return "http://127.0.0.1:" + port + "/asset/" + token;
     }
 
@@ -158,9 +174,23 @@ final class AssetServer {
         if (asset == null) return null;
         if (SystemClock.elapsedRealtime() > asset.expiresAt) {
             assets.remove(token);
+            App.log("asset: token expired token=" + shortToken(token) + " name=" + asset.name
+                    + " requests=" + asset.requests + " gets=" + asset.gets);
             return null;
         }
         return asset;
+    }
+
+    /** Count a request so the diagnostics show how often the page asked. */
+    private synchronized void noteRequest(Asset asset, boolean get) {
+        asset.requests += 1;
+        if (get) asset.gets += 1;
+    }
+
+    /** Short, log-friendly form of a random token (never the whole secret). */
+    private static String shortToken(String token) {
+        if (token == null) return "?";
+        return token.substring(0, Math.min(8, token.length()));
     }
 
     private void acceptLoop() {
@@ -253,9 +283,15 @@ final class AssetServer {
         if (query >= 0) token = token.substring(0, query);
         Asset asset = find(token);
         if (asset == null) {
+            App.log("asset: 404 token=" + shortToken(token)
+                    + " (unknown, already cleaned up, or expired)");
             writeStatus(out, "404 Not Found", headersFor("text/plain", 0, null, false));
             return;
         }
+        noteRequest(asset, !"HEAD".equals(method));
+        App.log("asset: request method=" + method + " token=" + shortToken(token)
+                + " name=" + asset.name + " range=" + headers.get("range")
+                + " requests=" + asset.requests + " gets=" + asset.gets);
         String mime = asset.mime == null || asset.mime.isEmpty()
                 ? "application/octet-stream" : asset.mime;
         long start = 0;
@@ -295,7 +331,8 @@ final class AssetServer {
         try {
             source = open(asset);
         } catch (Throwable error) {
-            App.log("asset server could not open its URI: " + error);
+            App.log("asset: open failed token=" + shortToken(token) + " name=" + asset.name
+                    + " error=" + error);
         }
         if (source == null) {
             writeStatus(out, "404 Not Found", headersFor("text/plain", 0, null, false));
@@ -325,23 +362,64 @@ final class AssetServer {
                 copy(source, out, length < 0 ? Long.MAX_VALUE : length);
                 out.flush();
                 served = true;
+                App.log("asset: sent token=" + shortToken(token) + " name=" + asset.name
+                        + " bytes=" + length + " partial=" + partial);
             }
+        } catch (Throwable error) {
+            App.log("asset: send failed token=" + shortToken(token) + " name=" + asset.name
+                    + " error=" + error);
+            throw error;
         } finally {
             try {
                 source.close();
             } catch (IOException ignored) {
             }
             if (served && asset.oneShot) {
-                // The page has the bytes now; the private copy has no further use.
-                try {
-                    new File(asset.uri.getPath()).delete();
-                } catch (Throwable ignored) {
-                }
-                synchronized (this) {
-                    assets.remove(token);
-                }
+                // Keep the token valid for a grace period: a HEAD-then-GET or a
+                // retried GET then still works instead of turning into a 404.
+                scheduleOneShotCleanup(token, asset);
             }
         }
+    }
+
+    /**
+     * Delete a one-shot capture a grace period after it was served.
+     *
+     * The bytes are already on the wire; the wait only exists so a second request
+     * from the page finds the same file. Runs on its own daemon thread because the
+     * accept loop must not block, and does nothing when the page never fetched the
+     * token (the bridge TTL and the next start's cleanup are the backstop).
+     */
+    private void scheduleOneShotCleanup(String token, Asset asset) {
+        synchronized (this) {
+            if (asset.cleanupScheduled) return;
+            asset.cleanupScheduled = true;
+        }
+        Thread cleaner = new Thread(() -> {
+            try {
+                Thread.sleep(ONESHOT_GRACE_MS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            boolean deleted = false;
+            if ("file".equals(asset.uri.getScheme())) {
+                try {
+                    deleted = new File(asset.uri.getPath()).delete();
+                } catch (Throwable error) {
+                    App.log("asset: one-shot delete failed token=" + shortToken(token)
+                            + " error=" + error);
+                }
+            }
+            synchronized (this) {
+                assets.remove(token);
+            }
+            App.log("asset: one-shot cleanup token=" + shortToken(token) + " name=" + asset.name
+                    + " requests=" + asset.requests + " gets=" + asset.gets
+                    + " deleted=" + deleted);
+        }, "dsh-asset-cleanup");
+        cleaner.setDaemon(true);
+        cleaner.start();
     }
 
     /** Open an asset: a provider URI, or the private file a capture was copied to. */

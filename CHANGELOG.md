@@ -47,17 +47,19 @@ _应用版本升级（要装新 APK）；签名与 1.2.2 相同、versionCode �
 ### Changed
 
 - **内置 UI 插件基线更新到 `dsh-mobile-shell` 0.6.13**：抽屉跟手 push、右栏关闭后可立即左滑、快速切换不闪白、短促快滑更容易打开；附件弹层去掉顶部暗线、最近照片支持再次点击取消选中与横向拖选/取消、拖到边缘自动滚动、`+`→`×` 旋转动画与弹层同步、主界面 logo 保留、弹层打开时 composer 菜单可用；消息内可滚动框的纵向滚动正常且左右滑不再触发侧栏；右栏隐藏宿主两个面板图标并新增全屏开关（全屏禁手势、返回键退出全屏）。
+- **内置 UI 插件基线更新到 `dsh-mobile-shell` 0.6.18**：右栏改为复用宿主官方 chrome（[全屏][收起] 与 header expand 图标）并采用 preload + 插件跟手/翻页方案；删除相机取消时的「相机未返回照片」提示；切换会话不再自动聚焦输入框/弹键盘；左上角菜单统一为汉堡「三」；附件弹层/照片交互（单击切换、长按 0.5s 连选、0.6.13 原生横向滚动）保持。
 - **不做插件自动更新**：APK 只内置基线插件（新装/重置 profile 时生效），之后升级统一走官方插件管理器。
 
 ### Fixed
 
-- **拍照照片不再写入系统相册**：拍照改为 `IS_PENDING=1` 的 MediaStore 行（图库不可见）→ 成功后复制到 App 私有 cache → 删除 MediaStore 行，临时文件供附件读取并在读取后/TTL 清理；取消与 0 字节失败都会清理，不再留下 `Pictures/dsh_*.jpg`。
-- **官方插件下载装到旧版**：pnpm 12 默认 `minimumReleaseAge=1440`（发布后 24 小时冷却），插件管理器展示的是 registry 最新版、实际 `pnpm add` 却解析到 24 小时前的旧版。现在 seed profile 与已装 profile 都写入 `minimumReleaseAge: 0`（`pnpm-workspace.yaml`，`repair-profile.mjs` 幂等迁移），官方“卸载→安装”即可装到最新发布版。
+- **拍照照片不再写入系统相册**：相机目标改为 App 内自建的 `content://dev.dsh.android.captures/…`（`CaptureProvider`，等价 FileProvider，指向私有 `cache/dsh-captures/capture_*.jpg`），相机直接写入 App 私有 cache，完全不经过 MediaStore；页面经临时内容服务读取，取消 / 0 字节 / 超时都会清理，图库/相册里不会出现任何拍照文件。
+- **华为相机崩溃导致拍照无照片（10219 回归）**：上一版的 `IS_PENDING=1` MediaStore 行会被 MediaProvider 拒绝非 owner 写入（`Only owner is able to interact with pending item`），华为相机写 `EXTRA_OUTPUT` 时直接崩溃，App 收到 `RESULT_CANCELED`，表现就是拍完没照片、也没有 chip。现在相机写 App 私有内容 URI，不再触发该限制；`AssetServer` 的一次性文件删除改为首次读取后延迟 60 秒（HEAD/重试/Range 不再 404），并补齐全链路 `camera:`/`asset:` 诊断日志。
+- **相册按钮落到文件管理器**：华为 Android 12（无 Photo Picker）上 `pickImages(gallery)` 与 `<input accept="image/*">` 回退路径原本使用 `ACTION_GET_CONTENT`，被 DocumentsUI 接管，用户看到「最近/图片/下载内容/图库/文件管理」的打开文件界面。现在改为 `ACTION_PICK` 直接调起系统图库（API 33+ 仍用 Photo Picker），保留多选与取消；拍照/文件选择不变。\n- **官方插件下载装到旧版**：pnpm 12 默认 `minimumReleaseAge=1440`（发布后 24 小时冷却），插件管理器展示的是 registry 最新版、实际 `pnpm add` 却解析到 24 小时前的旧版。现在 seed profile 与已装 profile 都写入 `minimumReleaseAge: 0`（`pnpm-workspace.yaml`，`repair-profile.mjs` 幂等迁移），官方“卸载→安装”即可装到最新发布版。
 
 ### 说明
 
 - 内置热包版本 `1.2.3-t3-sp0`：这条应用线的基础热包，随 APK 内置，不是单独的更新包。
-- 1.2.2 → 1.2.3 覆盖升级：同签名、versionCode 10219 > 10215，app 私有数据（会话、API key）保留。
+- 1.2.2 → 1.2.3 覆盖升级：同签名、versionCode 10221 > 10215，app 私有数据（会话、API key）保留。
 - 原生桥的内容服务只监听 `127.0.0.1`，随 Activity 销毁关闭；只服务本次选择/最近照片里登记过的 URI。
 
 ## [1.2.2] - 2026-10-19

@@ -96,6 +96,16 @@
             android:exported="false"
             android:stopWithTask="false" />
 
+        <!-- 拍照临时文件提供者：系统相机把照片直接写进 App 私有 cache 的 content:// URI。
+             不走 MediaStore：IS_PENDING 行会被相机拒绝打开（Only owner is able to
+             interact with pending item），照片也会进图库。provider 本身不导出，
+             只能通过每次拍照 Intent 的 URI 授权访问。 -->
+        <provider
+            android:name="dev.dsh.android.CaptureProvider"
+            android:authorities="dev.dsh.android.captures"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- Shizuku client plumbing (rikka.shizuku:provider). The manager
              process delivers its binder through this provider; the client
              library needs it declared with exactly this authority shape and

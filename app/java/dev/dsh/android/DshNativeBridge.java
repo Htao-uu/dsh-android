@@ -4,8 +4,9 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentUris;
-import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -27,10 +28,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -74,17 +72,8 @@ public final class DshNativeBridge {
     private static final int THUMB_MAX_BYTES = 40 * 1024;
     /** The plugin gives recentPhotos 1.8 s; spend less than that and answer. */
     private static final long RECENT_BUDGET_MS = 1200L;
-    /** Where a finished capture is copied before its MediaStore row is deleted. */
-    private static final String CAPTURE_DIR = "dsh-captures";
-    /** How long the private copy stays on disk for the page to fetch. */
+    /** How long a capture stays on disk when the page never fetches it. */
     private static final long CAPTURE_TTL_MS = 10 * 60 * 1000L;
-    /** Preferences file for the one capture fallback flag this class keeps. */
-    private static final String CAPTURE_PREFS = "dsh_captures";
-    /**
-     * Set after a camera that answered OK but wrote nothing: some ROM cameras
-     * cannot write a pending row, so the next capture asks for a plain one.
-     */
-    private static final String PREF_PENDING_REFUSED = "pending_refused";
 
     private final WeakReference<Activity> activityRef;
     private final WeakReference<WebView> webRef;
@@ -134,9 +123,9 @@ public final class DshNativeBridge {
         server.stop();
         io.shutdownNow();
         main.removeCallbacksAndMessages(null);
-        // A camera that never answered leaves a pending row behind; it is ours
-        // and invisible, so delete it now instead of waiting for the next start.
-        deleteCaptureRow(activityRef.get(), cameraOutput);
+        // A camera that never answered leaves its private target behind; delete
+        // it now instead of waiting for the next start.
+        discardCapture(activityRef.get(), cameraOutput);
         cameraOutput = null;
         pendingId = null;
         pendingMethod = null;
@@ -407,6 +396,7 @@ public final class DshNativeBridge {
         pendingId = id;
         pendingMethod = method;
         pendingParams = params;
+        App.log("native pick start id=" + id + " method=" + method + " params=" + params);
         try {
             if ("pickImages".equals(method)) {
                 String source = params.optString("source", "gallery");
@@ -416,19 +406,24 @@ public final class DshNativeBridge {
                     startCamera(activity);
                     return;
                 }
-                Intent pick = new Intent();
+                Intent pick;
                 if (Build.VERSION.SDK_INT >= 33) {
-                    pick.setAction(MediaStore.ACTION_PICK_IMAGES);
+                    pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
                     if (multiple) {
                         pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                         pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, max);
                     }
                 } else {
-                    pick.setAction(Intent.ACTION_GET_CONTENT);
-                    pick.addCategory(Intent.CATEGORY_OPENABLE);
-                    pick.setType("image/*");
-                    if (multiple) {
-                        pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    // No system Photo Picker before API 33: open the ROM gallery
+                    // itself. The old fallback (GET_CONTENT image/*) is answered by
+                    // DocumentsUI on many ROMs — the "最近/图片/下载内容/图库/文件管理"
+                    // file browser — which is not the album the button promises.
+                    pick = galleryPickIntent(activity, multiple);
+                    if (pick == null) {
+                        App.log("gallery: no ACTION_PICK handler, reporting picker failure");
+                        toast(activity, "没有可用的系统图库");
+                        finishPick(error("gallery_unavailable", "没有可用的系统图库"));
+                        return;
                     }
                 }
                 activity.startActivityForResult(pick, REQ_PICK_IMAGES);
@@ -451,210 +446,227 @@ public final class DshNativeBridge {
     private void startCamera(Activity activity) {
         Uri target = createCameraTarget(activity);
         if (target == null) {
+            App.log("camera: no target, camera unavailable");
             finishPick(error("camera_unavailable", "相机存储不可用"));
             return;
         }
         cameraOutput = target;
         Intent capture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         capture.putExtra(MediaStore.EXTRA_OUTPUT, target);
+        // EXTRA_OUTPUT is a stream extra: Android migrates it into ClipData so the
+        // URI grant applies. Setting the ClipData explicitly keeps the grant valid
+        // on ROMs whose camera resolves permissions from the clip data alone.
+        capture.setClipData(ClipData.newRawUri("", target));
         capture.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        App.log("camera: launch target=" + target
+                + " handlesIntent=" + (capture.resolveActivity(activity.getPackageManager()) != null));
         try {
             activity.startActivityForResult(capture, REQ_CAMERA);
         } catch (Throwable error) {
-            App.log("native camera intent failed: " + error);
+            App.log("camera: launch failed target=" + target + " error=" + error);
             cameraOutput = null;
-            deleteCaptureRow(activity, target);
+            discardCapture(activity, target);
             finishPick(error("camera_unavailable", "无法打开系统相机"));
         }
     }
 
     /**
-     * A MediaStore row the camera writes into, invisible to the gallery while it
-     * exists.
+     * The ROM gallery's own image picker, for releases without the system Photo
+     * Picker (API < 33).
      *
-     * A photo taken for a chat message is an attachment, not something the user
-     * asked to keep, so it must not show up in the phone's album. Android 10+
-     * hides an inserted row while {@code IS_PENDING=1}: it is not visible to the
-     * gallery or to other apps, but this app (and the camera, through the URI
-     * grant) can still write and read it. This class never clears the flag: once
-     * the camera answers, the bytes are copied into the app's private cache and
-     * the row is deleted together with the file behind it. Releases before
-     * Android 10 have no pending flag, so the row lives in the shared volume for
-     * the second between the capture and that cleanup.
+     * {@code ACTION_GET_CONTENT image/*} is answered by DocumentsUI on many ROMs
+     * — exactly the "最近/图片/下载内容/图库/文件管理" browser the user saw — while
+     * {@code ACTION_PICK} over the MediaStore images collection is the classic
+     * gallery intent: the gallery app answers it and shows albums/photos. The
+     * result handling is shared with the other pickers (ClipData for a gallery that
+     * can multi-select, single data otherwise), so single and multiple selections
+     * both come back through {@link #onActivityResult}.
+     *
+     * @return the intent, or null when no installed app handles ACTION_PICK (the
+     *         caller reports an error instead of silently opening a file browser).
      */
-    static Uri createCameraTarget(Activity activity) {
-        if (activity == null) return null;
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.Images.Media.DISPLAY_NAME,
-                "dsh_" + System.currentTimeMillis() + ".jpg");
-        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-        if (Build.VERSION.SDK_INT >= 29 && !pendingRowsRefused(activity)) {
-            ContentValues pending = new ContentValues(values);
-            pending.put(MediaStore.MediaColumns.IS_PENDING, 1);
-            Uri target = insertCapture(activity, pending);
-            if (target != null) return target;
-            // The app targets 28, so this row goes through the provider's legacy
-            // path; if that path refuses the pending flag the camera still needs
-            // somewhere to write. The capture is deleted right after it is read,
-            // so the fallback costs at most a moment in the shared volume.
-            App.log("native camera pending row refused; using a plain row");
+    static Intent galleryPickIntent(Activity activity, boolean multiple) {
+        PackageManager manager = activity.getPackageManager();
+        // Galleries differ in how they declare ACTION_PICK: data + image/* type,
+        // only the MediaStore collection as data, or only image/* as the type.
+        // Try the richest form first and fall back to the others, so the button
+        // still reaches a gallery on a ROM that registered just one of them.
+        Intent typed = new Intent(Intent.ACTION_PICK);
+        typed.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+        Intent[] variants = {
+                typed,
+                new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
+                new Intent(Intent.ACTION_PICK).setType("image/*")
+        };
+        for (Intent candidate : variants) {
+            if (multiple) candidate.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            candidate.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         }
-        return insertCapture(activity, values);
-    }
-
-    private static Uri insertCapture(Activity activity, ContentValues values) {
-        try {
-            return activity.getContentResolver().insert(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-        } catch (Throwable error) {
-            App.log("native camera target failed: " + error);
-            return null;
+        for (int index = 0; index < variants.length; index++) {
+            ResolveInfo resolved = manager.resolveActivity(
+                    variants[index], PackageManager.MATCH_DEFAULT_ONLY);
+            if (resolved == null || resolved.activityInfo == null) continue;
+            App.log("gallery: ACTION_PICK variant " + index + " resolves to "
+                    + resolved.activityInfo.packageName + "/" + resolved.activityInfo.name);
+            return variants[index];
         }
-    }
-
-    /** Has this device shown that its camera cannot write a pending row? */
-    private static boolean pendingRowsRefused(Activity activity) {
-        try {
-            return activity.getSharedPreferences(CAPTURE_PREFS, Activity.MODE_PRIVATE)
-                    .getBoolean(PREF_PENDING_REFUSED, false);
-        } catch (Throwable ignored) {
-            return false;
-        }
+        App.log("gallery: no ACTION_PICK handler for any variant");
+        return null;
     }
 
     /**
-     * Remember that the camera answered OK without writing anything.
+     * A content:// URI the camera writes into, backed by a private cache file.
      *
-     * The likely cause is a ROM camera that refuses the pending row, so the next
-     * capture asks for a plain (briefly visible) one instead of failing forever.
+     * MediaStore is deliberately not involved. An {@code IS_PENDING=1} row keeps
+     * a capture out of the gallery, but Android 12's MediaProvider refuses another
+     * app's {@code openOutputStream()} on a pending item ("Only owner is able to
+     * interact with pending item"). Huawei's camera writes {@code EXTRA_OUTPUT}
+     * exactly that way (ReviewPage → ActivityUtil.writeDataToUri), so it crashed
+     * and the capture never arrived. {@link CaptureProvider} hands the camera the
+     * very file the loopback content service later serves: the camera writes it
+     * with a normal per-URI grant, nothing reaches the shared volume or the
+     * gallery, and the file is deleted after the page fetched it.
      */
-    static void noteCaptureFailure(Activity activity) {
-        if (activity == null) return;
+    static Uri createCameraTarget(Activity activity) {
+        if (activity == null) return null;
+        File dir = CaptureProvider.directory(activity);
+        if (dir == null) return null;
+        File file = new File(dir, "capture_" + System.currentTimeMillis() + ".jpg");
         try {
-            activity.getSharedPreferences(CAPTURE_PREFS, Activity.MODE_PRIVATE)
-                    .edit().putBoolean(PREF_PENDING_REFUSED, true).apply();
-        } catch (Throwable ignored) {
+            if (!file.createNewFile() && !file.isFile()) {
+                App.log("camera: target file unavailable " + file);
+                return null;
+            }
+        } catch (Throwable error) {
+            App.log("camera: target file failed " + file + " error=" + error);
+            return null;
         }
+        return CaptureProvider.uriFor(activity, file);
     }
 
-    /** True only once the camera has actually put bytes behind the capture row. */
+    /** True only once the camera has actually put bytes behind the capture URI. */
     static boolean captureReady(Activity activity, Uri uri) {
         return captureSize(activity, uri) > 0;
     }
 
-    /** Size of a capture row: MediaStore first, the stream itself as the fallback. */
+    /** Size of a capture: the private file behind a provider URI, or a legacy row. */
     static long captureSize(Activity activity, Uri uri) {
         if (activity == null || uri == null) return -1;
+        File file = CaptureProvider.resolve(uri);
+        if (file != null) return file.length();
+        // A capture target from a build that used MediaStore still cleans up
+        // through the resolver; measuring it keeps that fallback honest.
         try (Cursor cursor = activity.getContentResolver().query(uri,
                 new String[]{OpenableColumns.SIZE}, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
                 int at = cursor.getColumnIndex(OpenableColumns.SIZE);
-                if (at >= 0 && !cursor.isNull(at) && cursor.getLong(at) > 0) {
-                    return cursor.getLong(at);
-                }
+                if (at >= 0 && !cursor.isNull(at)) return cursor.getLong(at);
             }
         } catch (Throwable ignored) {
         }
         return sizeOf(activity, uri);
     }
 
-    /** Delete a capture row; MediaStore removes the file behind it as well. */
-    static void deleteCaptureRow(Activity activity, Uri uri) {
+    /** Delete a capture (private file, or a legacy MediaStore row) and forget it. */
+    static void discardCapture(Activity activity, Uri uri) {
         if (activity == null || uri == null) return;
+        File file = CaptureProvider.resolve(uri);
+        long size = file == null ? -1 : file.length();
+        CaptureProvider.forget(uri);
+        if (file != null) {
+            boolean deleted = false;
+            try {
+                deleted = file.delete();
+            } catch (Throwable error) {
+                App.log("camera: discard failed file=" + file + " error=" + error);
+            }
+            App.log("camera: discarded name=" + file.getName() + " size=" + size
+                    + " deleted=" + deleted);
+            return;
+        }
+        // Legacy cleanup: rows created by builds before the provider existed.
         try {
             activity.getContentResolver().delete(uri, null, null);
+            App.log("camera: legacy capture row deleted " + uri);
         } catch (Throwable error) {
-            App.log("native camera cleanup failed: " + error);
+            App.log("camera: legacy capture row cleanup failed " + uri + " error=" + error);
         }
     }
 
-    /** Copy a finished capture into the private cache; null when nothing usable came back. */
-    private File copyCaptureToCache(Activity activity, Uri source, String name) {
-        File dir = new File(activity.getCacheDir(), CAPTURE_DIR);
-        if (!dir.isDirectory() && !dir.mkdirs()) return null;
-        File target = new File(dir, name);
-        try (InputStream in = activity.getContentResolver().openInputStream(source);
-             OutputStream out = new FileOutputStream(target)) {
-            if (in == null) throw new IOException("capture stream unavailable");
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
-        } catch (Throwable error) {
-            App.log("native camera copy failed: " + error);
-            try {
-                target.delete();
-            } catch (Throwable ignored) {
-            }
-            return null;
-        }
-        if (target.length() <= 0) {
-            try {
-                target.delete();
-            } catch (Throwable ignored) {
-            }
-            return null;
-        }
-        return target;
-    }
-
-    /** The private copy is only needed until the page fetched it; drop it later. */
+    /** The private capture is only needed until the page fetched it; drop it later. */
     private void scheduleCaptureCleanup(File file) {
         if (file == null) return;
         main.postDelayed(() -> {
             try {
                 file.delete();
-            } catch (Throwable ignored) {
+                App.log("camera: ttl cleanup name=" + file.getName()
+                        + " stillThere=" + file.exists());
+            } catch (Throwable error) {
+                App.log("camera: ttl cleanup failed file=" + file + " error=" + error);
             }
         }, CAPTURE_TTL_MS);
     }
 
     /**
-     * Remove captures a previous process left behind: private copies under
-     * {@code cache/dsh-captures} and pending MediaStore rows this app still owns.
-     * Pending rows are invisible to the gallery, but they still occupy the volume.
+     * Remove captures a previous process left behind: private capture files under
+     * {@code cache/dsh-captures}, and pending MediaStore rows an older build
+     * created before {@link CaptureProvider} replaced them (invisible to the
+     * gallery, but still occupying the volume).
      */
     static void cleanupStaleCaptures(Activity activity) {
         if (activity == null) return;
+        int files = 0;
         try {
-            File dir = new File(activity.getCacheDir(), CAPTURE_DIR);
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File file : files) {
+            File dir = CaptureProvider.directory(activity);
+            File[] children = dir == null ? null : dir.listFiles();
+            if (children != null) {
+                for (File file : children) {
                     try {
-                        file.delete();
+                        if (file.delete()) files += 1;
                     } catch (Throwable ignored) {
                     }
                 }
             }
-        } catch (Throwable ignored) {
-        }
-        if (Build.VERSION.SDK_INT < 29) return;
-        Cursor cursor = null;
-        try {
-            cursor = activity.getContentResolver().query(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME},
-                    MediaStore.MediaColumns.IS_PENDING + "=1", null, null);
-            if (cursor == null) return;
-            int idAt = cursor.getColumnIndex(MediaStore.MediaColumns._ID);
-            int nameAt = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME);
-            while (cursor.moveToNext()) {
-                long id = idAt < 0 ? -1 : cursor.getLong(idAt);
-                String name = nameAt < 0 || cursor.isNull(nameAt) ? null : cursor.getString(nameAt);
-                if (id < 0 || name == null || !name.startsWith("dsh_")) continue;
-                deleteCaptureRow(activity, ContentUris.withAppendedId(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id));
-            }
         } catch (Throwable error) {
-            App.log("stale capture cleanup failed: " + error);
-        } finally {
-            if (cursor != null) {
-                try {
-                    cursor.close();
-                } catch (Throwable ignored) {
+            App.log("camera: stale file cleanup failed: " + error);
+        }
+        int rows = 0;
+        if (Build.VERSION.SDK_INT >= 29) {
+            Cursor cursor = null;
+            try {
+                cursor = activity.getContentResolver().query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME},
+                        MediaStore.MediaColumns.IS_PENDING + "=1", null, null);
+                if (cursor != null) {
+                    int idAt = cursor.getColumnIndex(MediaStore.MediaColumns._ID);
+                    int nameAt = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME);
+                    while (cursor.moveToNext()) {
+                        long id = idAt < 0 ? -1 : cursor.getLong(idAt);
+                        String name = nameAt < 0 || cursor.isNull(nameAt) ? null : cursor.getString(nameAt);
+                        if (id < 0 || name == null || !name.startsWith("dsh_")) continue;
+                        try {
+                            activity.getContentResolver().delete(ContentUris.withAppendedId(
+                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id), null, null);
+                            rows += 1;
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+            } catch (Throwable error) {
+                App.log("camera: stale row cleanup failed: " + error);
+            } finally {
+                if (cursor != null) {
+                    try {
+                        cursor.close();
+                    } catch (Throwable ignored) {
+                    }
                 }
             }
+        }
+        if (files > 0 || rows > 0) {
+            App.log("camera: stale captures removed files=" + files + " rows=" + rows);
         }
     }
 
@@ -700,33 +712,43 @@ public final class DshNativeBridge {
             Uri captured = cameraOutput;
             cameraOutput = null;
             Activity activity = activityRef.get();
-            if (resultCode != Activity.RESULT_OK || captured == null) {
-                // Cancelled (or the camera never answered): drop the row, so a
-                // cancel cannot grow into a 0-byte photo on the shared volume.
-                deleteCaptureRow(activity, captured);
-                respond(id, files(new JSONArray()));
-                return true;
-            }
             if (activity == null) {
                 respond(id, error("unavailable", "应用已关闭"));
                 return true;
             }
-            String name = "capture_" + System.currentTimeMillis() + ".jpg";
+            File file = CaptureProvider.resolve(captured);
+            long size = file == null ? -1 : file.length();
+            App.log("camera: result result=" + resultCode
+                    + (resultCode == Activity.RESULT_OK ? "(OK)" : "(not-ok)")
+                    + " uri=" + captured
+                    + " file=" + (file == null ? "null" : file.getName()) + " size=" + size);
+            if (resultCode != Activity.RESULT_OK) {
+                // Cancelled (or the camera crashed): drop the empty target so a
+                // cancel never leaves a stray file behind.
+                discardCapture(activity, captured);
+                respond(id, files(new JSONArray()));
+                return true;
+            }
+            if (file == null || size <= 0) {
+                discardCapture(activity, captured);
+                toast(activity, "拍照失败：没有生成照片");
+                respond(id, error("capture_empty", "拍照失败：没有生成照片文件"));
+                return true;
+            }
             io.execute(() -> {
-                // Copy first, then delete: the page is served from private
-                // storage, and a capture never survives the session in an album.
-                File copy = copyCaptureToCache(activity, captured, name);
-                deleteCaptureRow(activity, captured);
-                if (copy == null) {
-                    noteCaptureFailure(activity);
-                    toast(activity, "拍照失败：没有生成照片");
-                    respond(id, error("capture_empty", "拍照失败：没有生成照片文件"));
+                JSONObject described = describeFile(file, file.getName());
+                if (described == null) {
+                    App.log("camera: publish failed file=" + file.getAbsolutePath());
+                    toast(activity, "拍照失败：无法读取照片");
+                    respond(id, error("capture_unreadable", "拍照失败：无法读取照片"));
                     return;
                 }
-                scheduleCaptureCleanup(copy);
+                App.log("camera: publishing size=" + size + " url=" + described.optString("url"));
                 JSONArray files = new JSONArray();
-                JSONObject file = describeFile(copy, name);
-                if (file != null) files.put(file);
+                files.put(described);
+                // The loopback service deletes the file once the page fetched it;
+                // this timer is the safety net for a page that never asks for it.
+                scheduleCaptureCleanup(file);
                 respond(id, files(files));
             });
             return true;

@@ -44,7 +44,7 @@ APK 默认启用以下三个插件：`profile/package.json` 的 `dependencies` +
 
 | 插件 | 版本 | 来源 | 许可 |
 |---|---|---|---|
-| `dsh-mobile-shell` | 0.6.13 | [Htao-uu/dsh-mobile-shell](https://github.com/Htao-uu/dsh-mobile-shell)（作者 Htao-uu，DSH 手机壳 UI） | MIT |
+| `dsh-mobile-shell` | 0.6.18 | [Htao-uu/dsh-mobile-shell](https://github.com/Htao-uu/dsh-mobile-shell)（作者 Htao-uu，DSH 手机壳 UI） | MIT |
 | `dsh-archived-chat-cleanup` | 1.0.0 | [Htao-uu/dsh-archived-chat-cleanup](https://github.com/Htao-uu/dsh-archived-chat-cleanup)（作者 Htao-uu，已归档会话清理） | MIT |
 | `agnes-media` | 1.8.3 | 上游 [LittleBeaverStudio/agnes-media](https://github.com/LittleBeaverStudio/agnes-media)（Copyright (c) 2026 LittleBeaverStudio，Agnes 图片/视频生成工具） | MIT |
 

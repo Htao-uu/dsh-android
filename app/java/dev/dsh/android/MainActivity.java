@@ -398,47 +398,57 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                 boolean imagesOnly = acceptsImagesOnly(params);
                 try {
                     // 1) <input type=file capture> -> the system camera. The picture
-                    //    is written into a MediaStore row this app owns, so the
-                    //    WebView can read it back without a FileProvider.
+                    //    is written into a private cache file behind this app's
+                    //    CaptureProvider URI (no MediaStore row, no FileProvider
+                    //    dependency), so the WebView can read it back and nothing
+                    //    reaches the gallery.
                     if (params != null && params.isCaptureEnabled()) {
                         Uri target = DshNativeBridge.createCameraTarget(MainActivity.this);
                         if (target != null) {
                             Intent capture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                             capture.putExtra(MediaStore.EXTRA_OUTPUT, target);
+                            // Migrated from the stream extra for the grant, set
+                            // explicitly for cameras that only look at ClipData.
+                            capture.setClipData(ClipData.newRawUri("", target));
                             capture.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                                     | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                             cameraOutput = target;
+                            App.log("camera: chooser launch target=" + target);
                             startActivityForResult(capture, REQ_CAMERA);
                             return true;
                         }
-                        // No writable MediaStore row (no permission, no volume):
+                        // No capture target (no cache dir):
                         // fall through to a picker instead of opening a camera that
                         // has nowhere to put the file.
-                        App.log("camera target unavailable; falling back to a picker");
+                        App.log("camera: chooser target unavailable; falling back to a picker");
                     }
 
                     // 2) accept only image/* -> the system photo picker, never the
-                    //    document UI (ACTION_OPEN_DOCUMENT lands in the file manager
-                    //    on most ROMs, which is what made camera/gallery inputs feel
-                    //    broken). Android 13+ has a dedicated picker; older systems
-                    //    get GET_CONTENT, which resolves to the gallery.
+                    //    document UI. Android 13+ has a dedicated picker; older
+                    //    systems get ACTION_PICK on the images collection, which the
+                    //    ROM gallery answers. GET_CONTENT here landed in DocumentsUI
+                    //    ("打开文件": 最近/图片/下载内容/图库/文件管理), which is why the
+                    //    gallery input looked like a file manager.
                     if (imagesOnly) {
-                        Intent pick = new Intent();
                         if (Build.VERSION.SDK_INT >= 33) {
-                            pick.setAction(MediaStore.ACTION_PICK_IMAGES);
+                            Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
                             if (multiple) {
                                 pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                                 pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 20);
                             }
                             startActivityForResult(pick, REQ_FILE);
                         } else {
-                            pick.setAction(Intent.ACTION_GET_CONTENT);
-                            pick.addCategory(Intent.CATEGORY_OPENABLE);
-                            pick.setType("image/*");
-                            if (multiple) {
-                                pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                            Intent gallery = DshNativeBridge.galleryPickIntent(MainActivity.this, multiple);
+                            if (gallery == null) {
+                                App.log("gallery: no ACTION_PICK handler for the WebView picker");
+                                Toast.makeText(MainActivity.this, "没有可用的系统图库", Toast.LENGTH_SHORT).show();
+                                if (fileCallback != null) {
+                                    fileCallback.onReceiveValue(null);
+                                    fileCallback = null;
+                                }
+                                return true;
                             }
-                            startActivityForResult(Intent.createChooser(pick, "选择图片"), REQ_FILE);
+                            startActivityForResult(gallery, REQ_FILE);
                         }
                         return true;
                     }
@@ -1566,19 +1576,23 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         Uri uri = data == null ? null : data.getData();
         if (requestCode == REQ_CAMERA) {
             // The camera app returns no data when EXTRA_OUTPUT is used; the photo is
-            // the MediaStore row this app created before launching it. That row is
-            // pending (gallery-invisible) on Android 10+, and it is deleted shortly
-            // after the WebView got the bytes, so the capture never reaches the album.
+            // the private file behind the CaptureProvider URI created before
+            // launching it. The WebView reads that URI directly, and the file is
+            // deleted once it had time to copy the bytes, so a capture never reaches
+            // the shared volume or the gallery.
             Uri captured = cameraOutput;
             cameraOutput = null;
-            boolean ready = resultCode == RESULT_OK && captured != null
-                    && DshNativeBridge.captureReady(this, captured);
+            File file = CaptureProvider.resolve(captured);
+            long size = file == null ? -1 : file.length();
+            boolean ready = resultCode == RESULT_OK && file != null && size > 0;
+            App.log("camera: chooser result result=" + resultCode
+                    + (resultCode == RESULT_OK ? "(OK)" : "(not-ok)")
+                    + " uri=" + captured + " size=" + size + " ready=" + ready);
             if (ready) {
                 scheduleCaptureCleanup(captured);
             } else {
-                DshNativeBridge.deleteCaptureRow(this, captured);
+                DshNativeBridge.discardCapture(this, captured);
                 if (resultCode == RESULT_OK && captured != null) {
-                    DshNativeBridge.noteCaptureFailure(this);
                     Toast.makeText(this, "拍照失败：没有生成照片", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -1637,21 +1651,21 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     }
 
     /**
-     * Delete a capture row after the WebView has had time to read it.
+     * Delete a capture file after the WebView has had time to read it.
      *
-     * The row itself is created by {@link DshNativeBridge#createCameraTarget} and
-     * is pending (gallery-invisible) on Android 10+. The WebView needs the
-     * content:// URI alive while it copies the bytes out of the file input, so the
-     * cleanup cannot run immediately; two minutes is far longer than that copy and
-     * short enough that an attached photo never lingers on the phone. A row the
-     * user cancelled is deleted at once, before it can become a 0-byte album entry.
+     * The file is created by {@link DshNativeBridge#createCameraTarget} behind a
+     * {@link CaptureProvider} URI, so it never touches MediaStore or the gallery.
+     * The WebView needs the URI alive while it copies the bytes out of the file
+     * input; two minutes is far longer than that copy and short enough that an
+     * attached photo never lingers on the phone. A capture the user cancelled is
+     * deleted at once.
      */
     private void scheduleCaptureCleanup(Uri uri) {
         if (uri == null) return;
         captureRows.add(uri);
         handler.postDelayed(() -> {
             captureRows.remove(uri);
-            DshNativeBridge.deleteCaptureRow(this, uri);
+            DshNativeBridge.discardCapture(this, uri);
         }, CAPTURE_ROW_TTL_MS);
     }
 
@@ -1824,7 +1838,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
     @Override
     protected void onDestroy() {
         for (Uri row : captureRows) {
-            DshNativeBridge.deleteCaptureRow(this, row);
+            DshNativeBridge.discardCapture(this, row);
         }
         captureRows.clear();
         if (nativeBridge != null) {

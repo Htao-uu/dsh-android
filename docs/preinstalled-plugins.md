@@ -106,7 +106,7 @@ _Install only plugins you trust: they run with your permissions and can damage D
 
 | 插件 | 版本 | 做什么 | 联网吗 |
 |---|---|---|---|
-| `dsh-mobile-shell` | 0.6.13 | App 风格的移动端外壳：抽屉导航（跟手 push）、附件弹层（拍照 / 相册 / 文件 / 最近照片连选）、App 式输入框与设置页、右栏全屏 | 不联网 |
+| `dsh-mobile-shell` | 0.6.18 | App 风格的移动端外壳：抽屉导航（跟手 push）、附件弹层（拍照 / 相册 / 文件 / 最近照片连选）、App 式输入框与设置页、右栏全屏 | 不联网 |
 | `dsh-archived-chat-cleanup` | 1.0.0 | 删除已归档会话：级联子代理会话、按引用回收附件，整事务可回滚 | 不联网（只操作本机会话数据） |
 | `agnes-media` | 1.8.3 | 注册 `generate_image` / `generate_video` 两个媒体生成工具（Agnes AI 模型） | **会联网**：默认请求 `https://apihub.agnes-ai.cn/v1` |
 

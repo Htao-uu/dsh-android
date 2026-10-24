@@ -15,7 +15,7 @@ runtime packaging are upstream work; this fork changes the pieces listed below.
 - [`dsh-hot.zip`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.3/dsh-hot.zip) — optional hot package, only for manual migration
 - [All releases](https://github.com/Htao-uu/dsh-android/releases)
 
-Requirements: Android 10+ (arm64), WebView 116+ recommended. Version 1.2.3, versionCode 10219.
+Requirements: Android 10+ (arm64), WebView 116+ recommended. Version 1.2.3, versionCode 10221.
 Install with `adb install -r -d dsh-android-1.2.3.apk` (same signing key as 1.2.2; data is preserved).
 
 ### What's new in 1.2.3
@@ -37,7 +37,7 @@ Install with `adb install -r -d dsh-android-1.2.3.apk` (same signing key as 1.2.
   (`generate_image` / `generate_video` tools). Fresh installs get them from the seed profile;
   already-installed devices get the files from the bundled hot overlay and an idempotent
   `repair-profile.mjs` migration — no reinstall and no payload re-extract.
-- Upgrading from 1.2.2 keeps app data (same signing key, versionCode 10219 > 10215).
+- Upgrading from 1.2.2 keeps app data (same signing key, versionCode 10221 > 10215).
 
 ### What is dsh-hot.zip
 
@@ -109,7 +109,7 @@ make that corresponding source available.
 - [`dsh-hot.zip`](https://github.com/Htao-uu/dsh-android/releases/download/v1.2.3/dsh-hot.zip)：可选热包（仅用于手动迁移）
 - [全部 Release](https://github.com/Htao-uu/dsh-android/releases)
 
-要求：Android 10+（arm64），建议 WebView 116+。版本 1.2.3，versionCode 10219。
+要求：Android 10+（arm64），建议 WebView 116+。版本 1.2.3，versionCode 10221。
 安装：`adb install -r -d dsh-android-1.2.3.apk`（与 1.2.2 同签名，覆盖安装保留数据）。
 
 ### 1.2.3 主要变化
@@ -117,7 +117,7 @@ make that corresponding source available.
 - **原生照片桥（`window.DSHNative`）**：附件弹层会显示「最近照片」，拍照 / 相册 / 文件按钮走原生选择器。App 实现 ANDROID-BRIDGE.md 里的 `capabilities` / `recentPhotos` / `openRecent` / `pickImages` / `pickFiles`（缩略图长边 ≤240、单张 ≤40 KB 的 data URL），选中的文件经 127.0.0.1 随机端口 + 随机令牌 + 5 分钟有效 + 只读 + CORS/Range 的临时内容服务交给页面，不暴露 `content://` 或任意路径；桥缺失/失败时插件仍隐藏该区域并回退到文件选择器。
 - **拍照 / 相册按钮走对系统界面**：WebView 文件选择器按 input 类型分流 —— `capture` 打开系统相机（照片写入 MediaStore 后回传给页面）、`accept="image/*"` 打开系统图片选择器（Android 13+ 的 Photo Picker，旧系统走图库），其余仍走文件选择器；多选、取消与相机返回都按 WebView 约定处理。
 - **三个插件默认内置**：`dsh-mobile-shell`（App 风格移动外壳）、`dsh-archived-chat-cleanup`（已归档会话清理与附件回收）、`agnes-media`（`generate_image` / `generate_video` 工具）。新装从 seed profile 直接可用；已装设备由内置 hot overlay 补齐文件，并由 `repair-profile.mjs` 幂等补 profile 行，不需要重装或重新解包。
-- 1.2.2 → 1.2.3 覆盖升级：同签名、versionCode 10219 > 10215，app 私有数据（会话、API key）保留。
+- 1.2.2 → 1.2.3 覆盖升级：同签名、versionCode 10221 > 10215，app 私有数据（会话、API key）保留。
 
 ### 热包（dsh-hot.zip）说明
 
