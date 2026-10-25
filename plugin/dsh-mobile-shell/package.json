@@ -1,6 +1,6 @@
 {
   "name": "dsh-mobile-shell",
-  "version": "0.6.18",
+  "version": "0.7.2",
   "private": false,
   "description": "DeepSeek App-style mobile shell for the DSH Web UI: drawer navigation, app-like composer and settings, Android back stack.",
   "type": "module",
@@ -13,7 +13,6 @@
   },
   "files": [
     "lib",
-    "docs",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
@@ -60,5 +59,8 @@
   "homepage": "https://github.com/Htao-uu/dsh-mobile-shell#readme",
   "bugs": {
     "url": "https://github.com/Htao-uu/dsh-mobile-shell/issues"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

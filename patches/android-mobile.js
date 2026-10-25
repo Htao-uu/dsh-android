@@ -98,15 +98,45 @@
   /* --- 3. state observation --------------------------------------------- */
 
   function observe() {
-    var root = document.body;
-    new MutationObserver(sync).observe(root, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-sidebar-collapsed", "style", "class"]
-    });
+    // Performance fix: never observe subtree style/class mutations on body.
+    // The mobile-shell plugin writes transform styles every animation frame,
+    // and the conversation DOM is large; a subtree attribute observer made
+    // this legacy patch run frame()/querySelector on every style mutation,
+    // causing 100ms+ long tasks and visible drawer stutter.
+    var observedFrame = null;
+    var observedParent = null;
+    var frameObserver = null;
+    var parentObserver = null;
+    var bodyObserver = new MutationObserver(function () { bind(); });
+
+    function bind() {
+      var current = frame();
+      if (current !== observedFrame) {
+        observedFrame = current;
+        if (frameObserver !== null) frameObserver.disconnect();
+        frameObserver = null;
+        if (current !== null) {
+          frameObserver = new MutationObserver(sync);
+          frameObserver.observe(current, { attributes: true, attributeFilter: ["data-sidebar-collapsed"] });
+        }
+      }
+      var parent = current === null ? null : current.parentElement;
+      if (parent !== observedParent) {
+        observedParent = parent;
+        if (parentObserver !== null) parentObserver.disconnect();
+        parentObserver = null;
+        if (parent !== null) {
+          parentObserver = new MutationObserver(bind);
+          parentObserver.observe(parent, { childList: true });
+        }
+      }
+      sync();
+    }
+
+    bodyObserver.observe(document.body, { childList: true });
     window.addEventListener("resize", sync, { passive: true });
     window.addEventListener("orientationchange", sync, { passive: true });
-    sync();
+    bind();
   }
 
   /* --- Android hardware back button ------------------------------------- */

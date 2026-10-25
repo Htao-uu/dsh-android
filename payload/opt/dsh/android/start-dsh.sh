@@ -87,6 +87,15 @@ fi
 rm -f "$GUEST_HOME"/.l2s.* 2>/dev/null || true
 find "$GUEST_HOME" -maxdepth 3 -name '.l2s.*' -delete 2>/dev/null || true
 
+# Performance fix: the legacy android-mobile.js observed style/class mutations
+# on the whole body subtree. The mobile-shell plugin writes transforms every
+# animation frame, so that observer re-ran on every frame. The hot overlay
+# carries the optimized file next to this script; install it over the frontend
+# asset before the web server starts.
+if [ -f "$DSH_INSTALL/android/android-mobile.js" ] && [ -f "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js" ]; then
+  cp -f "$DSH_INSTALL/android/android-mobile.js" "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js" 2>/dev/null || true
+fi
+
 # Refresh the plugin the profile resolves. The app writes this same path
 # directly from the hot overlay; this copy covers the case where the guest
 # boots without the app having run (fresh profile, manual start).
