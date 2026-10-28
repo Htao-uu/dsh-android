@@ -1066,6 +1066,7 @@ var DMS = (() => {
     return chrome;
   }
   function ensureSettings(panel) {
+    return;
     settingsChrome();
     const root = document.documentElement;
     const section = panel.querySelector('[class*="_options"]');
@@ -1089,6 +1090,8 @@ var DMS = (() => {
     }
   }
   function installSettingsWatcher() {
+    return () => {
+    };
     const root = document.documentElement;
     const apply2 = () => {
       const panel = settingsPanel();
