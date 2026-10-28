@@ -18,7 +18,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BUILD="$ROOT/build"
 ROOTFS="$BUILD/rootfs-ubuntu"
 UBUNTU_VERSION="${UBUNTU_VERSION:-24.04.5}"
-NODE_VERSION="${NODE_VERSION:-22.23.2}"
+NODE_VERSION="${NODE_VERSION:-24.22.1}"
 
 mkdir -p "$BUILD"
 
@@ -173,7 +173,7 @@ EOF
 cd "$ROOTFS/opt/dsh"
 HOME="${TMPDIR:-/tmp}/npmhome" npm i --no-audit --no-fund \
   --os=linux --cpu=arm64 --libc=glibc \
-  "@deepseek-ai/dsh@${DSH_VERSION:-0.2.0-rc.2}" \
+  "@deepseek-ai/dsh@${DSH_VERSION:-0.2.2-alpha.2}" \
   @xterm/xterm@5.5.0 @xterm/addon-fit@0.10.0 @xterm/addon-canvas@0.7.0
 
 # The stock node binary carries debug sections; stripping is worth ~18 MB and

@@ -43,7 +43,7 @@
 # 退出码：0 成功；1 失败（已回滚，除非 --keep-broken）；2 用法/环境问题；3 需要在恢复模式里跑。
 set -eu
 
-VERSION_DEFAULT="0.2.0-rc.2"
+VERSION_DEFAULT="0.2.2-alpha.2"
 DSH_INSTALL="${DSH_INSTALL:-/opt/dsh}"
 STATE_DIR="${DSH_UPGRADE_DIR:-$HOME/.dsh-upgrade}"
 BACKUP_DIR="${DSH_BACKUP_DIR:-/opt/dsh-backups}"
@@ -51,7 +51,7 @@ LOG="$STATE_DIR/upgrade.log"
 PENDING="$STATE_DIR/pending"
 NODE_BIN="${NODE_BIN:-/usr/local/bin/node}"
 NPM_BIN="${NPM_BIN:-/usr/local/bin/npm}"
-REQUIRED_NODE_MAJOR=22
+REQUIRED_NODE_MAJOR=24
 MIN_FREE_MB=900
 
 MODE=upgrade
