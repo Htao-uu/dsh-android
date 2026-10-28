@@ -1,6 +1,6 @@
 {
   "name": "dsh-mobile-shell",
-  "version": "0.7.2",
+  "version": "0.7.5",
   "private": false,
   "description": "DeepSeek App-style mobile shell for the DSH Web UI: drawer navigation, app-like composer and settings, Android back stack.",
   "type": "module",

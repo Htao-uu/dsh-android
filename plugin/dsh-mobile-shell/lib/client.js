@@ -32,43 +32,48 @@ var DMS = (() => {
 
   // src/core/state.js
   var state = {
+    // 左栏可见状态：左抽屉的单一状态源，sync() 据此切 dms-left-open，手势/返回键/自动关闭都读它。
     leftVisible: false,
+    // 右栏可见状态：右抽屉的单一状态源，sync() 据此切 dms-right-open；打开/关闭/返回键/顶栏都依赖它。
     rightVisible: false,
+    // 左栏宿主挂载忙标记：向宿主发出展开/toggle 请求期间为 true，防止重复点击再次 toggle 宿主。
     sidebarExpandBusy: false,
+    // 左栏宿主挂载阶段：idle/requesting/mounted/failed；预挂载、失败判定和手势 arm 等待都读它。
     sidebarMountState: "idle",
-    sidebarExpandTimer: 0,
-    rightActivityAt: 0,
-    leftRepairTimer: 0,
+    // 预加载点击放行标记：preloadRight 程序化点击宿主按钮时置 true，让 topbar 拦截器不要吞掉这次点击。
     rightPreloadClick: false,
+    // 右栏预加载状态：idle/请求中(busy)/成功(ok)/失败(fail)/取消(cancelled)；控制 preloadRight 是否重入。
     rightPreloadState: "idle",
+    // 已尝试预加载过的会话 ID 集合：同一 session 只尝试一次，避免反复切换宿主右栏。
     rightPreloadAttempts: /* @__PURE__ */ new Set(),
-    rightFallbackOpen: false,
-    rightLoadingEl: null,
-    rightOpenWaitTimer: 0,
-    rightWaitFallbackTried: false,
-    rightWaitStartedAt: 0,
-    rightWaitTimedOut: false,
-    rightViewTabsInjected: false,
+    // 监听宿主菜单 DOM 的 MutationObserver 句柄：菜单节点变化时重新扫描并注入 tab 项，销毁时必须 disconnect。
     rightViewMenuObserver: null,
+    // 菜单扫描的 requestAnimationFrame 句柄：合并同一帧内的多次 DOM 变化，避免重复扫描。
     rightViewMenuRaf: 0,
-    rightViewTabsFallback: false,
+    // 右栏预加载节流时间戳：距上次预加载不足 2000ms 时直接跳过，避免频繁点击宿主 expand。
     lastRightPreloadAt: 0,
+    // 上一个会话 key：定期 watcher / rAF 快速 watcher 用它判断是否切换了会话。
     sessionKeyPrev: "",
+    // 最近一次指针是否落在编辑器/输入区内：blurHostEditor 用来判断是否要保留宿主输入焦点。
     lastPointerInEditor: false,
+    // 最近一次指针时间戳：与 lastPointerInEditor 配合，900ms 内不强制抢焦点。
     lastPointerAt: 0,
+    // Cordis 插件上下文引用：back-stack/settings/left-drawer 通过它访问 layout 面板状态和返回逻辑。
     ctxRef: null,
+    // 手势忙碌锁：一次手势/spring 未结束时阻止新的 touch 手势进入，避免叠加动画和状态错乱。
     gestureBusy: false,
+    // 弹簧动画进行中标记：起始/结束/清理时同步；用于调试和防止手势与 spring 冲突。
     springAnimating: false,
+    // 调试关闭集合：解析 URL 的 ?dms-off=styles,observer,... 后保存，对应模块据此跳过安装。
     DEBUG_OFF: /* @__PURE__ */ new Set(),
-    rightFullIntent: false,
-    lastMountAttempt: 0,
-    autoWorkspaceTried: false,
+    // 会话快速观察截止时间戳：指针/切换会话后 1500ms 内用 rAF 高频检查 session key。
     sessionFastUntil: 0,
+    // 会话快速观察的 rAF 句柄：避免重复启动快速检查循环，销毁时取消。
     sessionFastRaf: 0
   };
 
   // src/core/constants.js
-  var MEDIA = "(max-width: 1023px)";
+  var MEDIA = "(max-width: 10230px)";
   var LOCK = 3;
   var ICONS = {
     menu: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
@@ -146,274 +151,274 @@ var DMS = (() => {
   }
 
   // src/styles/tokens.css
-  var tokens_default = ":root {\n  --dms-blue: #426efe;\n  --dms-bg: #ffffff;\n  --dms-bg-soft: #f5f7fb;\n  --dms-surface: #ffffff;\n  --dms-surface-2: #f2f4f8;\n  --dms-text: #0f0f0f;\n  --dms-text-2: #6b7280;\n  --dms-line: rgba(15, 15, 15, 0.07);\n  --dms-scrim: rgba(16, 19, 26, 0.32);\n  --dms-radius-lg: 28px;\n  --dms-radius: 14px;\n  --dms-topbar: 52px;\n  --dms-shadow-card: 0 2px 14px rgba(15, 23, 42, 0.06), 0 0 0 0.5px rgba(15, 23, 42, 0.04);\n  --dms-shadow-drawer: 0 0 48px rgba(15, 23, 42, 0.22);\n  color-scheme: light;\n}\nhtml[data-ds-dark-theme], body[data-ds-dark-theme], [data-ds-dark-theme] {\n  --dms-bg: #10131a;\n  --dms-bg-soft: #0b0e13;\n  --dms-surface: #191b23;\n  --dms-surface-2: #23262f;\n  --dms-text: #f5f5f5;\n  --dms-text-2: #9aa0aa;\n  --dms-line: rgba(255, 255, 255, 0.08);\n  --dms-scrim: rgba(0, 0, 0, 0.52);\n  --dms-shadow-card: 0 2px 16px rgba(0, 0, 0, 0.4);\n  color-scheme: dark;\n}\n\n@media (max-width: 1023px) {\n  /* One source of truth for the drawer width: drawers and the page push must use the\n     same value or a gap appears between the pushed page and the drawer edge (hotfix\n     Bug3: \u53F3\u680F\u4E0E\u4E3B\u754C\u9762\u4E4B\u95F4\u6709\u7A7A\u9699). */\n  html { --dms-drawer-w: min(326px, 80vw); }\n  html, body { background: var(--dms-bg); }\n  body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }\n\n";
+  var tokens_default = ":root {\r\n  --dms-blue: #426efe;\r\n  --dms-bg: #ffffff;\r\n  --dms-bg-soft: #f5f7fb;\r\n  --dms-surface: #ffffff;\r\n  --dms-surface-2: #f2f4f8;\r\n  --dms-text: #0f0f0f;\r\n  --dms-text-2: #6b7280;\r\n  --dms-line: rgba(15, 15, 15, 0.07);\r\n  --dms-scrim: rgba(16, 19, 26, 0.32);\r\n  --dms-radius-lg: 28px;\r\n  --dms-radius: 14px;\r\n  --dms-topbar: 52px;\r\n  --dms-shadow-card: 0 2px 14px rgba(15, 23, 42, 0.06), 0 0 0 0.5px rgba(15, 23, 42, 0.04);\r\n  --dms-shadow-drawer: 0 0 48px rgba(15, 23, 42, 0.22);\r\n  color-scheme: light;\r\n}\r\nhtml[data-ds-dark-theme], body[data-ds-dark-theme], [data-ds-dark-theme] {\r\n  --dms-bg: #10131a;\r\n  --dms-bg-soft: #0b0e13;\r\n  --dms-surface: #191b23;\r\n  --dms-surface-2: #23262f;\r\n  --dms-text: #f5f5f5;\r\n  --dms-text-2: #9aa0aa;\r\n  --dms-line: rgba(255, 255, 255, 0.08);\r\n  --dms-scrim: rgba(0, 0, 0, 0.52);\r\n  --dms-shadow-card: 0 2px 16px rgba(0, 0, 0, 0.4);\r\n  color-scheme: dark;\r\n}\r\n\r\n@media (max-width: 1023px) {\r\n  /* One source of truth for the drawer width: drawers and the page push must use the\r\n     same value or a gap appears between the pushed page and the drawer edge (hotfix\r\n     Bug3: \u53F3\u680F\u4E0E\u4E3B\u754C\u9762\u4E4B\u95F4\u6709\u7A7A\u9699). */\r\n  html { --dms-drawer-w: min(326px, 80vw); }\r\n  html, body { background: var(--dms-bg); }\r\n  body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }\r\n\r\n";
 
   // src/styles/frame.css
-  var frame_default = '  /* ---------- frame: one viewport, status bar clear ------------------------ */\n  html body [class*="_frame"] {\n    grid-template-columns: 0 minmax(0, 1fr) 0 !important;\n    background: var(--dms-bg) !important;\n    box-sizing: border-box !important;\n    padding-top: env(safe-area-inset-top, 0px) !important;\n  }\n  [class*="_centerCol"] { grid-column: 2 !important; background: var(--dms-bg) !important; }\n  [class*="_frame"] > [class*="_sidebarCol"] { background: var(--dms-bg) !important; }\n  [class*="_rightbarCol"] { grid-column: 3 !important; }\n  [class*="_bottomRow"],\n  [class*="_composerStack"], [class*="_composerHero"],\n  [class*="_heroWorkspaceRow"], [class*="_heroOptions"] { background: transparent !important; }\n  [class*="_handle"] { display: none !important; }\n\n';
+  var frame_default = '  /* ---------- frame: one viewport, status bar clear ------------------------ */\r\n  html body [class*="_frame"] {\r\n    grid-template-columns: 0 minmax(0, 1fr) 0 !important;\r\n    background: var(--dms-bg) !important;\r\n    box-sizing: border-box !important;\r\n    padding-top: env(safe-area-inset-top, 0px) !important;\r\n  }\r\n  [class*="_centerCol"] { grid-column: 2 !important; background: var(--dms-bg) !important; }\r\n  [class*="_frame"] > [class*="_sidebarCol"] { background: var(--dms-bg) !important; }\r\n  [class*="_rightbarCol"] { grid-column: 3 !important; }\r\n  [class*="_bottomRow"],\r\n  [class*="_composerStack"], [class*="_composerHero"],\r\n  [class*="_heroWorkspaceRow"], [class*="_heroOptions"] { background: transparent !important; }\r\n  [class*="_handle"] { display: none !important; }\r\n\r\n';
 
   // src/styles/left-drawer.css
-  var left_drawer_default = `  /* ---------- left drawer ------------------------------------------------- */
-  [class*="_frame"][data-sidebar-collapsed] > [class*="_sidebarCol"] { display: none !important; }
-  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] {
-    display: block !important;
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: var(--dms-drawer-w) !important;
-    max-width: var(--dms-drawer-w) !important;
-    height: 100% !important;
-    z-index: 90 !important;
-    background: var(--dms-bg-soft) !important;
-    border-right: none !important;
-    border-radius: 0 !important;
-    box-shadow: 10px 0 28px rgba(15, 23, 42, 0.18) !important;
-    /* The sidebar is preloaded and already painted under the page, so opening it
-       must not replay a slide-in animation (that was the source of the white
-       frame on fast drawer switches). Only the page push animates. */
-    animation: none !important;
-    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-    box-sizing: border-box !important;
-    padding-top: env(safe-area-inset-top, 0px) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-    overflow: hidden !important;
-  }
-  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] > *,
-  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] [class*="_root"] {
-    width: 100% !important;
-    max-width: none !important;
-  }
-  [class*="_sidebarCol"] [class*="_root"] { background: transparent !important; width: 100% !important; }
-  [class*="_sidebarCol"] [class*="_logoRow"] { padding: 6px 10px 2px !important; }
-  [class*="_sidebarCol"] [class*="_regionArea"],
-  [class*="_sidebarCol"] [class*="_panelList"] { overflow-x: hidden !important; }
-  [class*="_sidebarCol"] [class*="_regionArea"] { padding-left: 8px !important; padding-right: 8px !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"],
-  [class*="_sidebarCol"] [class*="_workspaceRow"],
-  [class*="_sidebarCol"] [class*="_regionHeader"] {
-    width: 100% !important; min-width: 0 !important;
-    padding-left: 2px !important; padding-right: 2px !important;
-    display: flex !important; align-items: center !important; gap: 2px !important;
-    overflow: visible !important;
-  }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *:first-child,
-  [class*="_sidebarCol"] [class*="_workspaceRow"] > *:first-child {
-    min-width: 0 !important; flex: 0 1 auto !important;
-    overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;
-  }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] button,
-  [class*="_sidebarCol"] [class*="_workspaceRow"] button { margin-left: 0 !important; margin-right: 0 !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *:last-child,
-  [class*="_sidebarCol"] [class*="_workspaceRow"] > *:last-child { margin-right: 2px !important; }
-  [class*="_sidebarCol"] [class*="_sectionHeader"],
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] {
-    width: 100% !important; min-width: 0 !important;
-    padding-left: 2px !important; padding-right: 2px !important;
-    gap: 2px !important; overflow: visible !important;
-    display: flex !important; align-items: center !important;
-  }
-  [class*="_sidebarCol"] [class*="_sectionHeader"] > *:first-child {
-    min-width: 40px !important; flex: 0 0 auto !important;
-    overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;
-  }
-  [class*="_sidebarCol"] [class*="_sectionHeader"] [class*="_searchSlot"] {
-    flex: 1 1 auto !important; width: auto !important; min-width: 24px !important;
-  }
-  [class*="_sidebarCol"] [class*="_sectionHeader"] button {
-    width: 24px !important; height: 24px !important; min-width: 24px !important;
-    margin-left: 0 !important; margin-right: 2px !important;
-  }
-  [class*="_sidebarCol"] [class*="_sectionHeader"] [class*="_searchSlot"] + * { margin-left: auto !important; }
-  [class*="_sidebarCol"] [class*="_sectionHeader"] svg { width: 16px !important; height: 16px !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] { font-size: 11px !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] button {
-    width: 24px !important; height: 24px !important; min-width: 24px !important;
-  }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] svg { width: 16px !important; height: 16px !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] [class*="_search"] {
-    width: 24px !important; min-width: 24px !important;
-  }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *,
-  [class*="_sidebarCol"] [class*="_workspaceRow"] > * { min-width: 0 !important; }
-  [class*="_sidebarCol"] [class*="_workspaceHeader"] button,
-  [class*="_sidebarCol"] [class*="_workspaceRow"] button { flex: 0 0 auto !important; }
-  /* the host hides these at narrow widths; a phone drawer still has room */
-  [class*="_sidebarCol"] [class*="_search"],
-  [class*="_sidebarCol"] [class*="_searchButton"] {
-    width: auto !important; min-width: 28px !important; max-width: none !important;
-    overflow: visible !important; flex: 0 0 auto !important;
-  }
-  [class*="_sidebarCol"] [class*="_search"] svg,
-  [class*="_sidebarCol"] [class*="_searchButton"] svg {
-    display: block !important; width: 20px !important; height: 20px !important; opacity: 1 !important;
-  }
-  [class*="_sidebarCol"] button[aria-label="\u641C\u7D22\u4F1A\u8BDD"],
-  [class*="_sidebarCol"] button[aria-label="\u89C6\u56FE\u9009\u9879"],
-  [class*="_sidebarCol"] button[aria-label="\u6DFB\u52A0\u5DE5\u4F5C\u533A"],
-  [class*="_sidebarCol"] [class*="_workspaceActions"] button,
-  [class*="_sidebarCol"] [class*="_searchButton"],
-  [class*="_sidebarCol"] [class*="_workspaceSearch"] {
-    display: inline-flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-  [class*="_sidebarCol"] [class*="_newSession"] {
-    justify-content: center !important;
-    gap: 8px !important;
-    text-align: center !important;
-  }
-  [class*="_sidebarCol"] [class*="_toggle"] { display: none !important; }
-  [class*="_sidebarCol"] [class*="_rowActions"] { display: none !important; }
-  .dshm-scrim { display: none !important; }
-  /* \u4EFB\u52A129\uFF1A\u9876\u90E8\u5DE6\u4E0A\u89D2\u7EDF\u4E00\u4E3A\u63D2\u4EF6\u6CE8\u5165\u7684\u300C\u4E09\u300D\u6C49\u5821\u6309\u94AE\uFF1B\u5BBF\u4E3B leading \u91CC\u7684\u539F\u56FE\u6807/\u5176\u5B83
-     \u6CE8\u5165\u9879\u4E00\u5F8B\u9690\u85CF\uFF0C\u907F\u514D\u51FA\u73B0\u65B9\u6846\u6216\u91CD\u590D\u6309\u94AE\u3002 */
-  [data-conversation-header-leading] > :not(.dms-menu):not([data-sidebar-right-expand]):not(:has([data-sidebar-right-expand])) { display: none !important; }
-  /* \u4EFB\u52A1 28\uFF1A\u5BF9\u8BDD\u9875/\u4E3B\u9875\u9762\u53F3\u4E0A\u89D2\u76F4\u63A5\u7528\u5BBF\u4E3B\u81EA\u5E26\u7684 expand \u56FE\u6807\uFF08\u4E0D\u6CE8\u5165\u81EA\u5EFA\u6309\u94AE\uFF09\uFF0C
-     \u7EDF\u4E00\u6210 DSH \u5B98\u65B9 28\xD728/16px \u900F\u660E\u56FE\u6807\u6309\u94AE\u89C4\u683C\u3002 */
-  [class*="_centerCol"] header [data-sidebar-right-expand][data-dms-hidden="1"] {
-    display: none !important;
-  }
-  .dms-right-menu {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 28px !important;
-    height: 28px !important;
-    min-width: 28px !important;
-    min-height: 28px !important;
-    padding: 0 !important;
-    margin: 0 2px !important;
-    border: 0 !important;
-    border-radius: var(--dsw-radius-sm, 8px) !important;
-    background: transparent !important;
-    color: var(--dsw-alias-label-secondary, var(--dms-text-2)) !important;
-  }
-  .dms-right-menu svg { width: 16px !important; height: 16px !important; }
-  /* Only the plugin-injected .dms-right-menu is shown. The host's own expand
-     button can render on either side of "..." for one frame during startup;
-     hide it from CSS immediately so the two never flash together. */
-  [data-sidebar-right-expand] {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-  }
-
+  var left_drawer_default = `  /* ---------- left drawer ------------------------------------------------- */\r
+  [class*="_frame"][data-sidebar-collapsed] > [class*="_sidebarCol"] { display: none !important; }\r
+  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] {\r
+    display: block !important;\r
+    position: fixed !important;\r
+    left: 0 !important;\r
+    top: 0 !important;\r
+    bottom: 0 !important;\r
+    width: var(--dms-drawer-w) !important;\r
+    max-width: var(--dms-drawer-w) !important;\r
+    height: 100% !important;\r
+    z-index: 90 !important;\r
+    background: var(--dms-bg-soft) !important;\r
+    border-right: none !important;\r
+    border-radius: 0 !important;\r
+    box-shadow: 10px 0 28px rgba(15, 23, 42, 0.18) !important;\r
+    /* The sidebar is preloaded and already painted under the page, so opening it\r
+       must not replay a slide-in animation (that was the source of the white\r
+       frame on fast drawer switches). Only the page push animates. */\r
+    animation: none !important;\r
+    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r
+    box-sizing: border-box !important;\r
+    padding-top: env(safe-area-inset-top, 0px) !important;\r
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;\r
+    overflow: hidden !important;\r
+  }\r
+  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] > *,\r
+  [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] [class*="_root"] {\r
+    width: 100% !important;\r
+    max-width: none !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_root"] { background: transparent !important; width: 100% !important; }\r
+  [class*="_sidebarCol"] [class*="_logoRow"] { padding: 6px 10px 2px !important; }\r
+  [class*="_sidebarCol"] [class*="_regionArea"],\r
+  [class*="_sidebarCol"] [class*="_panelList"] { overflow-x: hidden !important; }\r
+  [class*="_sidebarCol"] [class*="_regionArea"] { padding-left: 8px !important; padding-right: 8px !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"],\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"],\r
+  [class*="_sidebarCol"] [class*="_regionHeader"] {\r
+    width: 100% !important; min-width: 0 !important;\r
+    padding-left: 2px !important; padding-right: 2px !important;\r
+    display: flex !important; align-items: center !important; gap: 2px !important;\r
+    overflow: visible !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *:first-child,\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"] > *:first-child {\r
+    min-width: 0 !important; flex: 0 1 auto !important;\r
+    overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] button,\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"] button { margin-left: 0 !important; margin-right: 0 !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *:last-child,\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"] > *:last-child { margin-right: 2px !important; }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"],\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] {\r
+    width: 100% !important; min-width: 0 !important;\r
+    padding-left: 2px !important; padding-right: 2px !important;\r
+    gap: 2px !important; overflow: visible !important;\r
+    display: flex !important; align-items: center !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"] > *:first-child {\r
+    min-width: 40px !important; flex: 0 0 auto !important;\r
+    overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"] [class*="_searchSlot"] {\r
+    flex: 1 1 auto !important; width: auto !important; min-width: 24px !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"] button {\r
+    width: 24px !important; height: 24px !important; min-width: 24px !important;\r
+    margin-left: 0 !important; margin-right: 2px !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"] [class*="_searchSlot"] + * { margin-left: auto !important; }\r
+  [class*="_sidebarCol"] [class*="_sectionHeader"] svg { width: 16px !important; height: 16px !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] { font-size: 11px !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] button {\r
+    width: 24px !important; height: 24px !important; min-width: 24px !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] svg { width: 16px !important; height: 16px !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] [class*="_search"] {\r
+    width: 24px !important; min-width: 24px !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] > *,\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"] > * { min-width: 0 !important; }\r
+  [class*="_sidebarCol"] [class*="_workspaceHeader"] button,\r
+  [class*="_sidebarCol"] [class*="_workspaceRow"] button { flex: 0 0 auto !important; }\r
+  /* the host hides these at narrow widths; a phone drawer still has room */\r
+  [class*="_sidebarCol"] [class*="_search"],\r
+  [class*="_sidebarCol"] [class*="_searchButton"] {\r
+    width: auto !important; min-width: 28px !important; max-width: none !important;\r
+    overflow: visible !important; flex: 0 0 auto !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_search"] svg,\r
+  [class*="_sidebarCol"] [class*="_searchButton"] svg {\r
+    display: block !important; width: 20px !important; height: 20px !important; opacity: 1 !important;\r
+  }\r
+  [class*="_sidebarCol"] button[aria-label="\u641C\u7D22\u4F1A\u8BDD"],\r
+  [class*="_sidebarCol"] button[aria-label="\u89C6\u56FE\u9009\u9879"],\r
+  [class*="_sidebarCol"] button[aria-label="\u6DFB\u52A0\u5DE5\u4F5C\u533A"],\r
+  [class*="_sidebarCol"] [class*="_workspaceActions"] button,\r
+  [class*="_sidebarCol"] [class*="_searchButton"],\r
+  [class*="_sidebarCol"] [class*="_workspaceSearch"] {\r
+    display: inline-flex !important;\r
+    visibility: visible !important;\r
+    opacity: 1 !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_newSession"] {\r
+    justify-content: center !important;\r
+    gap: 8px !important;\r
+    text-align: center !important;\r
+  }\r
+  [class*="_sidebarCol"] [class*="_toggle"] { display: none !important; }\r
+  [class*="_sidebarCol"] [class*="_rowActions"] { display: none !important; }\r
+  .dshm-scrim { display: none !important; }\r
+  /* \u4EFB\u52A129\uFF1A\u9876\u90E8\u5DE6\u4E0A\u89D2\u7EDF\u4E00\u4E3A\u63D2\u4EF6\u6CE8\u5165\u7684\u300C\u4E09\u300D\u6C49\u5821\u6309\u94AE\uFF1B\u5BBF\u4E3B leading \u91CC\u7684\u539F\u56FE\u6807/\u5176\u5B83\r
+     \u6CE8\u5165\u9879\u4E00\u5F8B\u9690\u85CF\uFF0C\u907F\u514D\u51FA\u73B0\u65B9\u6846\u6216\u91CD\u590D\u6309\u94AE\u3002 */\r
+  [data-conversation-header-leading] > :not(.dms-menu):not([data-sidebar-right-expand]):not(:has([data-sidebar-right-expand])) { display: none !important; }\r
+  /* \u4EFB\u52A1 28\uFF1A\u5BF9\u8BDD\u9875/\u4E3B\u9875\u9762\u53F3\u4E0A\u89D2\u76F4\u63A5\u7528\u5BBF\u4E3B\u81EA\u5E26\u7684 expand \u56FE\u6807\uFF08\u4E0D\u6CE8\u5165\u81EA\u5EFA\u6309\u94AE\uFF09\uFF0C\r
+     \u7EDF\u4E00\u6210 DSH \u5B98\u65B9 28\xD728/16px \u900F\u660E\u56FE\u6807\u6309\u94AE\u89C4\u683C\u3002 */\r
+  [class*="_centerCol"] header [data-sidebar-right-expand][data-dms-hidden="1"] {\r
+    display: none !important;\r
+  }\r
+  .dms-right-menu {\r
+    display: inline-flex !important;\r
+    align-items: center !important;\r
+    justify-content: center !important;\r
+    width: 28px !important;\r
+    height: 28px !important;\r
+    min-width: 28px !important;\r
+    min-height: 28px !important;\r
+    padding: 0 !important;\r
+    margin: 0 2px !important;\r
+    border: 0 !important;\r
+    border-radius: var(--dsw-radius-sm, 8px) !important;\r
+    background: transparent !important;\r
+    color: var(--dsw-alias-label-secondary, var(--dms-text-2)) !important;\r
+  }\r
+  .dms-right-menu svg { width: 16px !important; height: 16px !important; }\r
+  /* Only the plugin-injected .dms-right-menu is shown. The host's own expand\r
+     button can render on either side of "..." for one frame during startup;\r
+     hide it from CSS immediately so the two never flash together. */\r
+  [data-sidebar-right-expand] {\r
+    display: none !important;\r
+    visibility: hidden !important;\r
+    pointer-events: none !important;\r
+  }\r
+\r
 `;
 
   // src/styles/right-drawer.css
-  var right_drawer_default = '  /* ---------- right drawer ------------------------------------------------ */\n  [class*="_frame"] > [class*="_rightbarCol"] {\n    --dsh-sidebar-width: var(--dms-drawer-w) !important;\n    display: block !important;\n    position: fixed !important;\n    top: 0 !important;\n    right: 0 !important;\n    bottom: 0 !important;\n    width: var(--dms-drawer-w) !important;\n    max-width: var(--dms-drawer-w) !important;\n    height: 100% !important;\n    z-index: 90 !important;\n    background: var(--dms-bg) !important;\n    border-radius: 0 !important;\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\n    transform: translateX(100%) !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n    box-sizing: border-box !important;\n    padding-top: env(safe-area-inset-top, 0px) !important;\n    padding-bottom: env(safe-area-inset-bottom, 0px) !important;\n    overflow: hidden !important;\n  }\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] {\n    transform: translateX(0) !important;\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\n  }\n  [class*="_rightbarCol"] > * { width: 100% !important; height: 100% !important; }\n  [class*="_rightbarCol"] [class*="_panel"],\n  [class*="_rightbarCol"] [class*="_session"] {\n    width: 100% !important;\n    max-width: none !important;\n    left: 0 !important;\n    right: auto !important;\n    transform: none !important;\n    background: var(--dms-bg) !important;\n  }\n  [class*="_rightbarCol"] [class*="_tabBody"] { width: 100% !important; }\n\n  /* \u4EFB\u52A1 28\uFF1A\u5BBF\u4E3B\u53F3\u680F\u9762\u677F\u5728 preload \u540E\u4FDD\u6301 collapsed\uFF08\u5BBF\u4E3B state \u4E0D\u518D\u6539\u52A8\uFF09\uFF0C\n     \u9762\u677F\u5185\u5BB9\uFF08\u542B\u5BBF\u4E3B\u81EA\u5DF1\u7684 chrome [\u5168\u5C4F][\u6536\u8D77] \u6309\u94AE\uFF09\u7531\u63D2\u4EF6 CSS \u653E\u51FA\u5E76\u968F\u9762\u677F\u79FB\u52A8\u3002 */\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-host=dock],\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-empty],\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-divider] {\n    transform: none !important;\n    visibility: visible !important;\n    transition: none !important;\n  }\n  html.dms-preload-right [data-sidebar-right-panel],\n  html.dms-right-open [data-sidebar-right-panel] {\n    width: 100% !important;\n    max-width: 100% !important;\n    --dsh-sidebar-width: var(--dms-drawer-w) !important;\n  }\n  html.dms-preload-right [data-sidebar-right-session] { pointer-events: none !important; }\n  /* \u4EFB\u52A132\uFF1A\u6253\u5F00\u6001\u5F3A\u5236\u53EF\u89C1/\u4E0D\u900F\u660E/\u53EF\u70B9\uFF0C\u8986\u76D6\u5BBF\u4E3B aria-hidden \u4E0E collapsed \u89C6\u89C9\u3002 */\n  html.dms-right-open [data-sidebar-right-session],\n  html.dms-right-open [data-sidebar-right-session][aria-hidden="true"] {\n    opacity: 1 !important;\n    visibility: visible !important;\n    pointer-events: auto !important;\n  }\n  /* \u5BBF\u4E3B chrome \u56FE\u6807\u6309\u94AE\uFF1A\u6CBF\u7528\u5BBF\u4E3B\u5B98\u65B9\u6837\u5F0F\uFF0828\xD728/15px \u56FE\u6807\uFF09\uFF0C\u8FD9\u91CC\u53EA\u4FDD\u8BC1\u53EF\u89C1\u53EF\u8FBE\u3002 */\n  html.dms-right-open [data-sidebar-right-session] [data-sidebar-right-mode],\n  html.dms-right-open [data-sidebar-right-session] [data-sidebar-right-toggle] {\n    display: inline-flex !important;\n    pointer-events: auto !important;\n  }\n\n  /* fullscreen right panel: host state is data-sidebar-right-panel="fullscreen";\n     sync() mirrors it to html.dms-right-full. The drawer covers the page and the\n     edge gestures are disabled in JS while this class is present. */\n    html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"] {\n    width: 100vw !important;\n    max-width: 100vw !important;\n    z-index: 95 !important;\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\n    transform: translateX(0) !important;\n  }\n  html.dms-right-full [class*="_centerCol"],\n  html.dms-right-full.dms-right-open [class*="_centerCol"] { transform: none !important; }\n  html.dms-right-full .dms-scrim { display: none !important; }\n\n';
+  var right_drawer_default = '  /* ---------- right drawer ------------------------------------------------ */\r\n  [class*="_frame"] > [class*="_rightbarCol"] {\r\n    --dsh-sidebar-width: var(--dms-drawer-w) !important;\r\n    display: block !important;\r\n    position: fixed !important;\r\n    top: 0 !important;\r\n    right: 0 !important;\r\n    bottom: 0 !important;\r\n    width: var(--dms-drawer-w) !important;\r\n    max-width: var(--dms-drawer-w) !important;\r\n    height: 100% !important;\r\n    z-index: 90 !important;\r\n    background: var(--dms-bg) !important;\r\n    border-radius: 0 !important;\r\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\r\n    transform: translateX(100%) !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n    box-sizing: border-box !important;\r\n    padding-top: env(safe-area-inset-top, 0px) !important;\r\n    padding-bottom: env(safe-area-inset-bottom, 0px) !important;\r\n    overflow: hidden !important;\r\n  }\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] {\r\n    transform: translateX(0) !important;\r\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\r\n  }\r\n  [class*="_rightbarCol"] > * { width: 100% !important; height: 100% !important; }\r\n  [class*="_rightbarCol"] [class*="_panel"],\r\n  [class*="_rightbarCol"] [class*="_session"] {\r\n    width: 100% !important;\r\n    max-width: none !important;\r\n    left: 0 !important;\r\n    right: auto !important;\r\n    transform: none !important;\r\n    background: var(--dms-bg) !important;\r\n  }\r\n  [class*="_rightbarCol"] [class*="_tabBody"] { width: 100% !important; }\r\n\r\n  /* \u4EFB\u52A1 28\uFF1A\u5BBF\u4E3B\u53F3\u680F\u9762\u677F\u5728 preload \u540E\u4FDD\u6301 collapsed\uFF08\u5BBF\u4E3B state \u4E0D\u518D\u6539\u52A8\uFF09\uFF0C\r\n     \u9762\u677F\u5185\u5BB9\uFF08\u542B\u5BBF\u4E3B\u81EA\u5DF1\u7684 chrome [\u5168\u5C4F][\u6536\u8D77] \u6309\u94AE\uFF09\u7531\u63D2\u4EF6 CSS \u653E\u51FA\u5E76\u968F\u9762\u677F\u79FB\u52A8\u3002 */\r\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-host=dock],\r\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-empty],\r\n  html.dms-right-open [data-sidebar-right-session] [data-dockkit-divider] {\r\n    transform: none !important;\r\n    visibility: visible !important;\r\n    transition: none !important;\r\n  }\r\n  html.dms-preload-right [data-sidebar-right-panel],\r\n  html.dms-right-open [data-sidebar-right-panel] {\r\n    width: 100% !important;\r\n    max-width: 100% !important;\r\n    --dsh-sidebar-width: var(--dms-drawer-w) !important;\r\n  }\r\n  html.dms-preload-right [data-sidebar-right-session] { pointer-events: none !important; }\r\n  /* \u4EFB\u52A132\uFF1A\u6253\u5F00\u6001\u5F3A\u5236\u53EF\u89C1/\u4E0D\u900F\u660E/\u53EF\u70B9\uFF0C\u8986\u76D6\u5BBF\u4E3B aria-hidden \u4E0E collapsed \u89C6\u89C9\u3002 */\r\n  html.dms-right-open [data-sidebar-right-session],\r\n  html.dms-right-open [data-sidebar-right-session][aria-hidden="true"] {\r\n    opacity: 1 !important;\r\n    visibility: visible !important;\r\n    pointer-events: auto !important;\r\n  }\r\n  /* \u5BBF\u4E3B chrome \u56FE\u6807\u6309\u94AE\uFF1A\u6CBF\u7528\u5BBF\u4E3B\u5B98\u65B9\u6837\u5F0F\uFF0828\xD728/15px \u56FE\u6807\uFF09\uFF0C\u8FD9\u91CC\u53EA\u4FDD\u8BC1\u53EF\u89C1\u53EF\u8FBE\u3002 */\r\n  html.dms-right-open [data-sidebar-right-session] [data-sidebar-right-mode],\r\n  html.dms-right-open [data-sidebar-right-session] [data-sidebar-right-toggle] {\r\n    display: inline-flex !important;\r\n    pointer-events: auto !important;\r\n  }\r\n\r\n  /* fullscreen right panel: host state is data-sidebar-right-panel="fullscreen";\r\n     sync() mirrors it to html.dms-right-full. The drawer covers the page and the\r\n     edge gestures are disabled in JS while this class is present. */\r\n    html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"] {\r\n    width: 100vw !important;\r\n    max-width: 100vw !important;\r\n    z-index: 95 !important;\r\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\r\n    transform: translateX(0) !important;\r\n  }\r\n  html.dms-right-full [class*="_centerCol"],\r\n  html.dms-right-full.dms-right-open [class*="_centerCol"] { transform: none !important; }\r\n  html.dms-right-full .dms-scrim { display: none !important; }\r\n\r\n';
 
   // src/styles/right-drawer-loading.css
-  var right_drawer_loading_default = '  /* \u4EFB\u52A133\uFF1Aheader \u7684\u300C\u5BF9\u8BDD/\u8F68\u8FF9\u300Dtab \u884C\u79FB\u5165\u300C...\u300D\u83DC\u5355\uFF1B\u672A\u6210\u529F\u6CE8\u5165\u65F6\u7531 JS \u79FB\u9664\n     dms-vtabs-menu\uFF0C\u56DE\u9000\u4E3A header \u5E38\u9A7B\u3002 */\n  html.dms-vtabs-menu [data-conversation-tabs] { display: none !important; }\n\n  /* \u4EFB\u52A133\uFF1A\u53F3\u680F\u52A0\u8F7D\u5360\u4F4D\uFF08\u5185\u5BB9\u672A\u5C31\u7EEA\u65F6\u907F\u514D\u7A7A\u767D\u62BD\u5C49\uFF09\u3002 */\n  .dms-right-loading {\n    position: fixed;\n    top: 0; right: 0; bottom: 0;\n    width: var(--dms-drawer-w);\n    max-width: var(--dms-drawer-w);\n    z-index: 94;\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    justify-content: center;\n    gap: 12px;\n    background: var(--dms-bg);\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\n    pointer-events: none;\n  }\n  .dms-right-loading[hidden] { display: none !important; }\n  .dms-right-loading-spinner {\n    width: 26px; height: 26px; border-radius: 50%;\n    border: 2.5px solid var(--dms-line, rgba(148, 163, 184, 0.35));\n    border-top-color: var(--dms-blue, #426efe);\n    animation: dms-spin 0.8s linear infinite;\n  }\n  .dms-right-loading-text { font-size: 13px; color: var(--dms-text-2); }\n  @keyframes dms-spin { to { transform: rotate(360deg); } }\n  html.dms-right-full .dms-right-loading { width: 100vw; max-width: 100vw; }\n\n  /* \u4EFB\u52A134\uFF1A\u9634\u5F71\u53EA\u6302\u5728\u9762\u677F/rightbarCol \u4E0A\uFF0C\u968F\u62BD\u5C49\u4E00\u8D77\u79FB\u52A8\uFF1B\u5220\u6389 body::after \u56FA\u5B9A\u6E10\u53D8\u3002 */\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\n  html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"] {\n    overflow: visible !important;\n  }\n  html.dms-right-open [data-sidebar-right-session],\n  html.dms-right-full [data-sidebar-right-session] {\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\n  }\n  /* \u88C1\u526A\u515C\u5E95\uFF1A\u5728 rightbarCol \u5DE6\u8FB9\u7F18\u753B\u968F\u62BD\u5C49\u79FB\u52A8\u7684\u6E10\u53D8\uFF08rightbarCol overflow:visible \u65F6\u53EF\u89C1\uFF09\u3002 */\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"]::before,\n  html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"]::before {\n    content: "";\n    position: absolute;\n    top: 0; bottom: 0; left: 0;\n    width: 24px;\n    transform: translateX(-100%);\n    background: linear-gradient(to left, rgba(15, 23, 42, 0.20), rgba(15, 23, 42, 0));\n    pointer-events: none;\n    z-index: 5;\n  }\n\n  /* \u4EFB\u52A135\uFF1A\u6253\u5F00\u6001\u5F3A\u5236\u53EF\u4EA4\u4E92\u2014\u2014\u8986\u76D6 preload \u7684 pointer-events:none\uFF1Bscrim(z80) \u5728\u9762\u677F(z90)\n     \u4E4B\u4E0B\u4E0D\u6321\u70B9\u51FB\uFF1B\u52A0\u8F7D\u5360\u4F4D(z94) pointer-events:none \u53EA\u505A\u89C6\u89C9\u8986\u76D6\u3002 */\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] *,\n  html.dms-right-open [data-sidebar-right-session],\n  html.dms-right-open [data-sidebar-right-session] *,\n  html.dms-right-open [data-sidebar-right-panel],\n  html.dms-right-open [data-sidebar-right-panel] * {\n    pointer-events: auto !important;\n  }\n  html.dms-right-open .dms-right-loading,\n  html.dms-right-open .dms-right-loading * { pointer-events: none !important; }\n\n';
+  var right_drawer_loading_default = '  /* \u4EFB\u52A133\uFF1Aheader \u7684\u300C\u5BF9\u8BDD/\u8F68\u8FF9\u300Dtab \u884C\u79FB\u5165\u300C...\u300D\u83DC\u5355\uFF1B\u672A\u6210\u529F\u6CE8\u5165\u65F6\u7531 JS \u79FB\u9664\r\n     dms-vtabs-menu\uFF0C\u56DE\u9000\u4E3A header \u5E38\u9A7B\u3002:\u9690\u85CF\u539F\u59CB\u7684\u300C\u5BF9\u8BDD / \u8F68\u8FF9\u300D\u6807\u7B7E\u884C\u3002 */\r\n  html.dms-vtabs-menu [data-conversation-tabs] { display: none !important; }\r\n\r\n  /* \u4EFB\u52A134\uFF1A\u9634\u5F71\u53EA\u6302\u5728\u9762\u677F/rightbarCol \u4E0A\uFF0C\u968F\u62BD\u5C49\u4E00\u8D77\u79FB\u52A8\uFF1B\u5220\u6389 body::after \u56FA\u5B9A\u6E10\u53D8\u3002 */\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\r\n  html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"] {\r\n    overflow: visible !important;\r\n  }\r\n  html.dms-right-open [data-sidebar-right-session],\r\n  html.dms-right-full [data-sidebar-right-session] {\r\n    box-shadow: -10px 0 28px rgba(15, 23, 42, 0.18) !important;\r\n  }\r\n  /* \u88C1\u526A\u515C\u5E95\uFF1A\u5728 rightbarCol \u5DE6\u8FB9\u7F18\u753B\u968F\u62BD\u5C49\u79FB\u52A8\u7684\u6E10\u53D8\uFF08rightbarCol overflow:visible \u65F6\u53EF\u89C1\uFF09\u3002 */\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"]::before,\r\n  html.dms-right-full [class*="_frame"] > [class*="_rightbarCol"]::before {\r\n    content: "";\r\n    position: absolute;\r\n    top: 0; bottom: 0; left: 0;\r\n    width: 24px;\r\n    transform: translateX(-100%);\r\n    background: linear-gradient(to left, rgba(15, 23, 42, 0.20), rgba(15, 23, 42, 0));\r\n    pointer-events: none;\r\n    z-index: 5;\r\n  }\r\n\r\n  /* \u4EFB\u52A135\uFF1A\u6253\u5F00\u6001\u5F3A\u5236\u53EF\u4EA4\u4E92\u2014\u2014\u8986\u76D6 preload \u7684 pointer-events:none\uFF1Bscrim(z80) \u5728\u9762\u677F(z90) \u4E4B\u4E0B\u4E0D\u6321\u70B9\u51FB\u3002 */\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] *,\r\n  html.dms-right-open [data-sidebar-right-session],\r\n  html.dms-right-open [data-sidebar-right-session] *,\r\n  html.dms-right-open [data-sidebar-right-panel],\r\n  html.dms-right-open [data-sidebar-right-panel] * {\r\n    pointer-events: auto !important;\r\n  }\r\n\r\n';
 
   // src/styles/scrim.css
-  var scrim_default = '  /* ---------- scrim ------------------------------------------------------- */\n  .dms-scrim {\n    position: fixed; inset: 0; z-index: 80;\n    background: transparent !important;\n    opacity: 0; pointer-events: none;\n    transition: opacity 0.2s ease;\n  }\n  html.dms-left-open .dms-scrim,\n  html.dms-right-open .dms-scrim { opacity: 1; pointer-events: auto; }\n\n  /* App-style push: the page moves with the drawer. This deliberately revisits\n     the "never push" rule in HANDOVER \xA714 \u2014 the blank strip seen then came from\n     the host sidebar not being mounted yet; with the P0 preload fix it is always\n     painted under the page, so pushing exposes the drawer, not a white gap.\n     Duration/easing match the drawer transition (0.24s) for a single motion. */\n  html.dms-left-open [class*="_centerCol"] {\n    transform: translate3d(var(--dms-drawer-w), 0, 0) !important;\n    opacity: 1 !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n  }\n  /* Right drawer is an app-style push again. The preloaded left sidebar is\n     hidden while the page is shifted, so closing cannot expose it. */\n  html.dms-right-open [class*="_centerCol"] {\n    transform: translate3d(calc(-1 * var(--dms-drawer-w)), 0, 0) !important;\n    opacity: 1 !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n  }\n  html:not(.dms-left-open):not(.dms-right-open) [class*="_centerCol"] {\n    transform: none !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n  }\n\n';
+  var scrim_default = '  /* ---------- scrim ------------------------------------------------------- */\r\n  .dms-scrim {\r\n    position: fixed; inset: 0; z-index: 80;\r\n    background: transparent !important;\r\n    opacity: 0; pointer-events: none;\r\n    transition: opacity 0.2s ease;\r\n  }\r\n  html.dms-left-open .dms-scrim,\r\n  html.dms-right-open .dms-scrim { opacity: 1; pointer-events: auto; }\r\n\r\n  /* App-style push: the page moves with the drawer. This deliberately revisits\r\n     the "never push" rule in HANDOVER \xA714 \u2014 the blank strip seen then came from\r\n     the host sidebar not being mounted yet; with the P0 preload fix it is always\r\n     painted under the page, so pushing exposes the drawer, not a white gap.\r\n     Duration/easing match the drawer transition (0.24s) for a single motion. */\r\n  html.dms-left-open [class*="_centerCol"] {\r\n    transform: translate3d(var(--dms-drawer-w), 0, 0) !important;\r\n    opacity: 1 !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n  }\r\n  /* Right drawer is an app-style push again. The preloaded left sidebar is\r\n     hidden while the page is shifted, so closing cannot expose it. */\r\n  html.dms-right-open [class*="_centerCol"] {\r\n    transform: translate3d(calc(-1 * var(--dms-drawer-w)), 0, 0) !important;\r\n    opacity: 1 !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n  }\r\n  html:not(.dms-left-open):not(.dms-right-open) [class*="_centerCol"] {\r\n    transform: none !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n  }\r\n\r\n';
 
   // src/styles/topbar.css
-  var topbar_default = `  /* ---------- top bar (host header, restyled) ----------------------------- */
-  [class*="_centerCol"] header.dms-topbar {
-    height: var(--dms-topbar) !important;
-    min-height: var(--dms-topbar) !important;
-    padding: 0 12px !important;
-    background: var(--dms-bg) !important;
-    border-bottom: none !important;
-    box-sizing: border-box !important;
-    align-items: center !important;
-    position: relative !important;
-    z-index: 30 !important;
-  }
-  [class*="_centerCol"] header.dms-topbar [class*="_headerLeading"] {
-    display: flex !important; align-items: center !important;
-    gap: 4px !important; min-width: 0 !important; height: 100%;
-  }
-  [class*="_centerCol"] header.dms-topbar [class*="_headerCorner"] {
-    display: flex !important; align-items: center !important; gap: 4px !important;
-    position: relative !important; right: auto !important; top: auto !important;
-    height: 100%;
-  }  [class*="_centerCol"] header.dms-topbar [data-conversation-header-leading],
-  [class*="_centerCol"] header.dms-topbar [data-conversation-header-corner] {
-    gap: 4px !important; align-items: center !important;
-  }
-  [class*="_centerCol"] header.dms-topbar [class*="_titleRow"] { align-items: center !important; min-height: 100%; }
-  [class*="_centerCol"] header.dms-topbar[class*="headerBlank"] .dms-plus { display: none !important; }
-
-  .dms-menu { position: relative !important; z-index: 6 !important; }
-  /* 0.6.18: all injected header buttons copy the DSH host icon-button metrics
-     (ui-sidebar HeaderLeadingControls): 28px square, radius-sm, label-secondary,
-     16px glyph, transparent + interactive hover. No custom sizes/colors. */
-  /* 0.6.18 \u4FEE\u6B63\uFF1A\u6240\u6709\u6CE8\u5165\u6309\u94AE\u7EDF\u4E00 DSH \u5BBF\u4E3B\u5B98\u65B9\u56FE\u6807\u6309\u94AE\u89C4\u683C
-     \u2014\u2014 28\xD728\u3001\u900F\u660E\u5E95\u300116px \u56FE\u6807\u3001\u6309\u4E0B\u6D45\u8272\u53CD\u9988\uFF08\u9876\u90E8\u680F\u4E0E\u53F3\u680F\u5171\u7528\u540C\u4E00\u5957\uFF09\u3002 */
-  .dms-iconbtn {
-    width: 28px; height: 28px; flex: 0 0 28px;
-    display: inline-flex; align-items: center; justify-content: center;
-    border: 0; border-radius: var(--dsw-radius-sm, 8px); padding: 0; margin: 0;
-    background: transparent; color: var(--dsw-alias-label-secondary, var(--dms-text-2));
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-  }
-  .dms-iconbtn:active { background: var(--dsw-alias-interactive-bg-hover, var(--dms-surface-2)) !important; }
-  .dms-iconbtn svg { display: block; width: 16px !important; height: 16px !important; }
-  /* Do not inflate the host's own header buttons: keep the official 28px/16px so
-     the injected icons and the host actions share one compact row. */
-  [class*="_centerCol"] header.dms-topbar [class*="_button_"],
-  [class*="_centerCol"] header.dms-topbar [class*="_iconButton"] {
-    width: 28px !important; height: 28px !important; min-width: 28px !important;
-    border-radius: var(--dsw-radius-sm, 8px) !important;
-    color: var(--dsw-alias-label-secondary, var(--dms-text-2)) !important;
-  }
-  [class*="_centerCol"] header.dms-topbar [class*="_button_"] svg,
-  [class*="_centerCol"] header.dms-topbar [class*="_iconButton"] svg { width: 16px !important; height: 16px !important; }
+  var topbar_default = `  /* ---------- top bar (host header, restyled) ----------------------------- */\r
+  [class*="_centerCol"] header.dms-topbar {\r
+    height: var(--dms-topbar) !important;\r
+    min-height: var(--dms-topbar) !important;\r
+    padding: 0 12px !important;\r
+    background: var(--dms-bg) !important;\r
+    border-bottom: none !important;\r
+    box-sizing: border-box !important;\r
+    align-items: center !important;\r
+    position: relative !important;\r
+    z-index: 30 !important;\r
+  }\r
+  [class*="_centerCol"] header.dms-topbar [class*="_headerLeading"] {\r
+    display: flex !important; align-items: center !important;\r
+    gap: 4px !important; min-width: 0 !important; height: 100%;\r
+  }\r
+  [class*="_centerCol"] header.dms-topbar [class*="_headerCorner"] {\r
+    display: flex !important; align-items: center !important; gap: 4px !important;\r
+    position: relative !important; right: auto !important; top: auto !important;\r
+    height: 100%;\r
+  }  [class*="_centerCol"] header.dms-topbar [data-conversation-header-leading],\r
+  [class*="_centerCol"] header.dms-topbar [data-conversation-header-corner] {\r
+    gap: 4px !important; align-items: center !important;\r
+  }\r
+  [class*="_centerCol"] header.dms-topbar [class*="_titleRow"] { align-items: center !important; min-height: 100%; }\r
+  [class*="_centerCol"] header.dms-topbar[class*="headerBlank"] .dms-plus { display: none !important; }\r
+\r
+  .dms-menu { position: relative !important; z-index: 6 !important; }\r
+  /* 0.6.18: all injected header buttons copy the DSH host icon-button metrics\r
+     (ui-sidebar HeaderLeadingControls): 28px square, radius-sm, label-secondary,\r
+     16px glyph, transparent + interactive hover. No custom sizes/colors. */\r
+  /* 0.6.18 \u4FEE\u6B63\uFF1A\u6240\u6709\u6CE8\u5165\u6309\u94AE\u7EDF\u4E00 DSH \u5BBF\u4E3B\u5B98\u65B9\u56FE\u6807\u6309\u94AE\u89C4\u683C\r
+     \u2014\u2014 28\xD728\u3001\u900F\u660E\u5E95\u300116px \u56FE\u6807\u3001\u6309\u4E0B\u6D45\u8272\u53CD\u9988\uFF08\u9876\u90E8\u680F\u4E0E\u53F3\u680F\u5171\u7528\u540C\u4E00\u5957\uFF09\u3002 */\r
+  .dms-iconbtn {\r
+    width: 28px; height: 28px; flex: 0 0 28px;\r
+    display: inline-flex; align-items: center; justify-content: center;\r
+    border: 0; border-radius: var(--dsw-radius-sm, 8px); padding: 0; margin: 0;\r
+    background: transparent; color: var(--dsw-alias-label-secondary, var(--dms-text-2));\r
+    -webkit-tap-highlight-color: transparent;\r
+    cursor: pointer;\r
+  }\r
+  .dms-iconbtn:active { background: var(--dsw-alias-interactive-bg-hover, var(--dms-surface-2)) !important; }\r
+  .dms-iconbtn svg { display: block; width: 16px !important; height: 16px !important; }\r
+  /* Do not inflate the host's own header buttons: keep the official 28px/16px so\r
+     the injected icons and the host actions share one compact row. */\r
+  [class*="_centerCol"] header.dms-topbar [class*="_button_"],\r
+  [class*="_centerCol"] header.dms-topbar [class*="_iconButton"] {\r
+    width: 28px !important; height: 28px !important; min-width: 28px !important;\r
+    border-radius: var(--dsw-radius-sm, 8px) !important;\r
+    color: var(--dsw-alias-label-secondary, var(--dms-text-2)) !important;\r
+  }\r
+  [class*="_centerCol"] header.dms-topbar [class*="_button_"] svg,\r
+  [class*="_centerCol"] header.dms-topbar [class*="_iconButton"] svg { width: 16px !important; height: 16px !important; }\r
 `;
 
   // src/styles/hero.css
-  var hero_default = '  /* ---------- hero -------------------------------------------------------- */\n  [class*="_centerCol"] [class*="_headline"] {\n    flex-direction: column !important;\n    align-items: center !important;\n    justify-content: center !important;\n    gap: 14px !important;\n  }\n  [class*="_centerCol"] [class*="_fishHitbox"] svg { width: 64px !important; height: 48px !important; }\n  [class*="_centerCol"] [class*="_titleGroup"] { gap: 0 !important; }\n  [class*="_centerCol"] [class*="_titleGroup"] > span:first-child {\n    font-size: 21px !important; font-weight: 600 !important; letter-spacing: 0.2px !important;\n  }\n  [class*="_previewBadge"] { display: none !important; }\n\n  /* hero page: keep the greeter centred but pin the composer to the bottom */\n  html.dms-hero-home [class*="_scrollBody"] { justify-content: flex-start !important; }\n  html.dms-hero-home [data-composer-seat] {\n    flex: 1 1 auto !important; min-height: 0 !important;\n    display: flex !important; flex-direction: column !important;\n  }\n  html.dms-hero-home [class*="_composerHero"] {\n    flex: 1 1 auto !important; min-height: 0 !important;\n    display: flex !important; flex-direction: column !important;\n    justify-content: flex-end !important;\n  }\n  html.dms-hero-home [class*="_composerHero"] > [class*="_root"] {\n    margin-top: auto !important; margin-bottom: auto !important;\n  }\n  /* 0.6.15: compress the vertical rhythm only - the logo and \u63A2\u7D22\u672A\u81F3\u4E4B\u5883 keep\n     their host font/logo sizes (the user asked to undo the 0.6.14 shrink). */\n  html.dms-attach-open [class*="_centerCol"] [class*="_headline"] {\n    gap: 6px !important;\n    margin-top: 0 !important;\n  }\n\n  /* conversation messages align with the composer card width */\n  [class*="_centerCol"] [class*="_scroll"]:has(> [class*="_column"]) {\n    padding-left: 12px !important;\n    padding-right: 12px !important;\n  }\n\n';
+  var hero_default = '  /* ---------- hero -------------------------------------------------------- */\r\n  [class*="_centerCol"] [class*="_headline"] {\r\n    flex-direction: column !important;\r\n    align-items: center !important;\r\n    justify-content: center !important;\r\n    gap: 14px !important;\r\n  }\r\n  [class*="_centerCol"] [class*="_fishHitbox"] svg { width: 64px !important; height: 48px !important; }\r\n  [class*="_centerCol"] [class*="_titleGroup"] { gap: 0 !important; }\r\n  [class*="_centerCol"] [class*="_titleGroup"] > span:first-child {\r\n    font-size: 21px !important; font-weight: 600 !important; letter-spacing: 0.2px !important;\r\n  }\r\n  [class*="_previewBadge"] { display: none !important; }\r\n\r\n  /* hero page: keep the greeter centred but pin the composer to the bottom */\r\n  html.dms-hero-home [class*="_scrollBody"] { justify-content: flex-start !important; }\r\n  html.dms-hero-home [data-composer-seat] {\r\n    flex: 1 1 auto !important; min-height: 0 !important;\r\n    display: flex !important; flex-direction: column !important;\r\n  }\r\n  html.dms-hero-home [class*="_composerHero"] {\r\n    flex: 1 1 auto !important; min-height: 0 !important;\r\n    display: flex !important; flex-direction: column !important;\r\n    justify-content: flex-end !important;\r\n  }\r\n  html.dms-hero-home [class*="_composerHero"] > [class*="_root"] {\r\n    margin-top: auto !important; margin-bottom: auto !important;\r\n  }\r\n  /* 0.6.15: compress the vertical rhythm only - the logo and \u63A2\u7D22\u672A\u81F3\u4E4B\u5883 keep\r\n     their host font/logo sizes (the user asked to undo the 0.6.14 shrink). */\r\n  html.dms-attach-open [class*="_centerCol"] [class*="_headline"] {\r\n    gap: 6px !important;\r\n    margin-top: 0 !important;\r\n  }\r\n\r\n  /* conversation messages align with the composer card width */\r\n  [class*="_centerCol"] [class*="_scroll"]:has(> [class*="_column"]) {\r\n    padding-left: 12px !important;\r\n    padding-right: 12px !important;\r\n  }\r\n\r\n';
 
   // src/styles/composer.css
-  var composer_default = '  /* ---------- composer ---------------------------------------------------- */\n  [data-composer-seat] { background: var(--dms-bg) !important; }\n  [data-composer-card] {\n    border-radius: var(--dms-radius-lg) !important;\n    background: var(--dms-surface) !important;\n    border: 0 !important;\n    box-shadow: var(--dms-shadow-card) !important;\n    padding: 12px 12px 10px !important;\n    margin: 0 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;\n  }\n  [data-composer-input] { font-size: 16px !important; line-height: 1.45 !important; color: var(--dms-text) !important; }\n  [data-composer-placeholder] { font-size: 16px !important; color: var(--dms-text-2) !important; }\n  [data-composer-card] [class*="_row"] { gap: 6px !important; }\n  [data-composer-card] [class*="_add"] {\n    width: 36px !important; height: 36px !important; min-width: 36px !important;\n    border-radius: 50% !important; background: var(--dms-surface-2) !important;\n    color: var(--dms-text) !important; border: 0 !important;\n  }\n  [data-composer-card] [class*="_add"] svg { width: 18px !important; height: 18px !important; }\n  [data-composer-card] [class*="_primary"] {\n    width: 38px !important; height: 38px !important; min-width: 38px !important;\n    border-radius: 50% !important;\n    background: var(--dms-blue) !important;\n    color: #fff !important;\n    border: 0 !important;\n    box-shadow: 0 4px 12px rgba(66, 110, 254, 0.32) !important;\n    transition: background 0.16s ease, transform 0.12s ease !important;\n  }\n  [data-composer-card] [class*="_primary"]:disabled,\n  [data-composer-card] [class*="_primary"][aria-disabled="true"] {\n    background: var(--dms-surface-2) !important;\n    color: var(--dms-text-2) !important;\n    box-shadow: none !important;\n  }\n  [data-composer-card] [class*="_primary"] svg { width: 19px !important; height: 19px !important; }\n  [data-composer-card] [class*="_primary"]:active { transform: scale(0.94); }\n\n  /* DSH-style round icon controls: permission + model, no labels/chevrons */\n  [class*="_modes"] button, [class*="_standardControls"] button {\n    width: 36px !important; height: 36px !important; min-width: 36px !important;\n    padding: 0 !important;\n    border-radius: 50% !important;\n    background: var(--dms-surface-2) !important;\n    border: 0 !important;\n    color: var(--dms-text) !important;\n    font-size: 0 !important;\n    display: inline-flex !important; align-items: center !important; justify-content: center !important;\n    overflow: hidden !important;\n  }\n  [class*="_modes"] button [class*="_triggerLabel"],\n  [class*="_modes"] button [class*="_chevron"],\n  [class*="_standardControls"] button [class*="_triggerLabel"],\n  [class*="_standardControls"] button [class*="_chevron"] { display: none !important; }\n  [class*="_modes"] button svg, [class*="_standardControls"] button svg {\n    display: block !important;\n    width: 18px !important; height: 18px !important; color: var(--dms-text) !important;\n  }\n  [class*="_standardControls"] button svg:last-child { display: none !important; }\n  .dms-menu svg { transform: scaleX(-1); }\n  [class*="_notice"] { color: var(--dms-text-2) !important; background: transparent !important; }\n\n  /* conversation footer stats: keep the three parts on one compact line */\n';
+  var composer_default = '  /* ---------- composer ---------------------------------------------------- */\r\n  [data-composer-seat] { background: var(--dms-bg) !important; }\r\n  [data-composer-card] {\r\n    border-radius: var(--dms-radius-lg) !important;\r\n    background: var(--dms-surface) !important;\r\n    border: 0 !important;\r\n    box-shadow: var(--dms-shadow-card) !important;\r\n    padding: 12px 12px 10px !important;\r\n    margin: 0 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;\r\n  }\r\n  [data-composer-input] { font-size: 16px !important; line-height: 1.45 !important; color: var(--dms-text) !important; }\r\n  [data-composer-placeholder] { font-size: 16px !important; color: var(--dms-text-2) !important; }\r\n  [data-composer-card] [class*="_row"] { gap: 6px !important; }\r\n  [data-composer-card] [class*="_add"] {\r\n    width: 36px !important; height: 36px !important; min-width: 36px !important;\r\n    border-radius: 50% !important; background: var(--dms-surface-2) !important;\r\n    color: var(--dms-text) !important; border: 0 !important;\r\n  }\r\n  [data-composer-card] [class*="_add"] svg { width: 18px !important; height: 18px !important; }\r\n  [data-composer-card] [class*="_primary"] {\r\n    width: 38px !important; height: 38px !important; min-width: 38px !important;\r\n    border-radius: 50% !important;\r\n    background: var(--dms-blue) !important;\r\n    color: #fff !important;\r\n    border: 0 !important;\r\n    box-shadow: 0 4px 12px rgba(66, 110, 254, 0.32) !important;\r\n    transition: background 0.16s ease, transform 0.12s ease !important;\r\n  }\r\n  [data-composer-card] [class*="_primary"]:disabled,\r\n  [data-composer-card] [class*="_primary"][aria-disabled="true"] {\r\n    background: var(--dms-surface-2) !important;\r\n    color: var(--dms-text-2) !important;\r\n    box-shadow: none !important;\r\n  }\r\n  [data-composer-card] [class*="_primary"] svg { width: 19px !important; height: 19px !important; }\r\n  [data-composer-card] [class*="_primary"]:active { transform: scale(0.94); }\r\n\r\n  /* DSH-style round icon controls: permission + model, no labels/chevrons */\r\n  [class*="_modes"] button, [class*="_standardControls"] button {\r\n    width: 36px !important; height: 36px !important; min-width: 36px !important;\r\n    padding: 0 !important;\r\n    border-radius: 50% !important;\r\n    background: var(--dms-surface-2) !important;\r\n    border: 0 !important;\r\n    color: var(--dms-text) !important;\r\n    font-size: 0 !important;\r\n    display: inline-flex !important; align-items: center !important; justify-content: center !important;\r\n    overflow: hidden !important;\r\n  }\r\n  [class*="_modes"] button [class*="_triggerLabel"],\r\n  [class*="_modes"] button [class*="_chevron"],\r\n  [class*="_standardControls"] button [class*="_triggerLabel"],\r\n  [class*="_standardControls"] button [class*="_chevron"] { display: none !important; }\r\n  [class*="_modes"] button svg, [class*="_standardControls"] button svg {\r\n    display: block !important;\r\n    width: 18px !important; height: 18px !important; color: var(--dms-text) !important;\r\n  }\r\n  [class*="_standardControls"] button svg:last-child { display: none !important; }\r\n  .dms-menu svg { transform: scaleX(-1); }\r\n  [class*="_notice"] { color: var(--dms-text-2) !important; background: transparent !important; }\r\n\r\n  /* conversation footer stats: keep the three parts on one compact line */\r\n';
 
   // src/styles/composer-stats.css
-  var composer_stats_default = '  [class*="_composerDock"], [data-composer-dock] {\n    padding: 0 8px calc(3px + env(safe-area-inset-bottom, 0px)) !important;\n    min-height: 16px !important;\n    font-size: 10.5px !important;\n    color: var(--dms-text-2) !important;\n    display: flex !important; align-items: center !important;\n    gap: 4px !important;\n    overflow: hidden !important;\n  }\n  [class*="_composerDock"] > *, [data-composer-dock] > * {\n    min-width: 0 !important;\n    overflow: hidden !important;\n    text-overflow: ellipsis !important;\n    white-space: nowrap !important;\n    font-size: 10.5px !important;\n    line-height: 1.25 !important;\n    gap: 3px !important;\n  }\n  [class*="_composerDock"] svg, [data-composer-dock] svg { width: 12px !important; height: 12px !important; }\n  [class*="_composerDock"] button, [data-composer-dock] button { font-size: 10.5px !important; height: auto !important; padding: 0 1px !important; }\n  [data-composer-stats] {\n    gap: 0 !important;\n    justify-content: space-between !important;\n    width: 100% !important;\n    max-width: 100% !important;\n    padding: 0 6px !important;\n    font-size: 10px !important;\n    line-height: 1.25 !important;\n    overflow: visible !important;\n  }\n  [data-composer-stats] > * {\n    flex: 0 0 auto !important;\n    max-width: none !important;\n    min-width: 0 !important;\n    overflow: visible !important;\n  }\n  [data-composer-stats] [class*="_pill"] {\n    max-width: none !important;\n    padding: 0 1px !important;\n    gap: 2px !important;\n    font-size: 10px !important;\n    white-space: nowrap !important;\n  }\n  [data-composer-stats] [class*="_label"] {\n    min-width: 0 !important;\n    overflow: visible !important;\n    text-overflow: clip !important;\n    white-space: nowrap !important;\n  }\n  [data-composer-stats] [class*="_sep"] {\n    display: inline-block !important;\n    width: 5px !important;\n    height: 1px !important;\n    margin: 0 2px !important;\n    overflow: hidden !important;\n    color: transparent !important;\n    font-size: 0 !important;\n    vertical-align: middle !important;\n  }\n  [data-composer-stats] { gap: 6px !important; }\n  [data-composer-stats] [class*="_label"] { display: inline-flex !important; align-items: center !important; gap: 2px !important; }\n  [data-composer-stats] svg { width: 10px !important; height: 10px !important; }\n  [class*="_statusBar"], [class*="_statusLine"], [class*="_sessionStats"], [class*="_statsLine"], [class*="_usageBar"] {\n    font-size: 11px !important;\n    gap: 6px !important;\n    padding-left: 12px !important; padding-right: 12px !important;\n    overflow: hidden !important;\n  }\n  [class*="_statusBar"] > *, [class*="_statusLine"] > *, [class*="_sessionStats"] > *, [class*="_statsLine"] > * {\n    min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;\n  }\n\n';
+  var composer_stats_default = '  [class*="_composerDock"], [data-composer-dock] {\r\n    padding: 0 8px calc(3px + env(safe-area-inset-bottom, 0px)) !important;\r\n    min-height: 16px !important;\r\n    font-size: 10.5px !important;\r\n    color: var(--dms-text-2) !important;\r\n    display: flex !important; align-items: center !important;\r\n    gap: 4px !important;\r\n    overflow: hidden !important;\r\n  }\r\n  [class*="_composerDock"] > *, [data-composer-dock] > * {\r\n    min-width: 0 !important;\r\n    overflow: hidden !important;\r\n    text-overflow: ellipsis !important;\r\n    white-space: nowrap !important;\r\n    font-size: 10.5px !important;\r\n    line-height: 1.25 !important;\r\n    gap: 3px !important;\r\n  }\r\n  [class*="_composerDock"] svg, [data-composer-dock] svg { width: 12px !important; height: 12px !important; }\r\n  [class*="_composerDock"] button, [data-composer-dock] button { font-size: 10.5px !important; height: auto !important; padding: 0 1px !important; }\r\n  [data-composer-stats] {\r\n    gap: 0 !important;\r\n    justify-content: space-between !important;\r\n    width: 100% !important;\r\n    max-width: 100% !important;\r\n    padding: 0 6px !important;\r\n    font-size: 10px !important;\r\n    line-height: 1.25 !important;\r\n    overflow: visible !important;\r\n  }\r\n  [data-composer-stats] > * {\r\n    flex: 0 0 auto !important;\r\n    max-width: none !important;\r\n    min-width: 0 !important;\r\n    overflow: visible !important;\r\n  }\r\n  [data-composer-stats] [class*="_pill"] {\r\n    max-width: none !important;\r\n    padding: 0 1px !important;\r\n    gap: 2px !important;\r\n    font-size: 10px !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-composer-stats] [class*="_label"] {\r\n    min-width: 0 !important;\r\n    overflow: visible !important;\r\n    text-overflow: clip !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-composer-stats] [class*="_sep"] {\r\n    display: inline-block !important;\r\n    width: 5px !important;\r\n    height: 1px !important;\r\n    margin: 0 2px !important;\r\n    overflow: hidden !important;\r\n    color: transparent !important;\r\n    font-size: 0 !important;\r\n    vertical-align: middle !important;\r\n  }\r\n  [data-composer-stats] { gap: 6px !important; }\r\n  [data-composer-stats] [class*="_label"] { display: inline-flex !important; align-items: center !important; gap: 2px !important; }\r\n  [data-composer-stats] svg { width: 10px !important; height: 10px !important; }\r\n  [class*="_statusBar"], [class*="_statusLine"], [class*="_sessionStats"], [class*="_statsLine"], [class*="_usageBar"] {\r\n    font-size: 11px !important;\r\n    gap: 6px !important;\r\n    padding-left: 12px !important; padding-right: 12px !important;\r\n    overflow: hidden !important;\r\n  }\r\n  [class*="_statusBar"] > *, [class*="_statusLine"] > *, [class*="_sessionStats"] > *, [class*="_statsLine"] > * {\r\n    min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;\r\n  }\r\n\r\n';
 
   // src/styles/settings.css
-  var settings_default = '  /* ---------- settings ---------------------------------------------------- */\n  [data-shortcut-modal="settings"], [data-shortcut-modal="settings"] * { box-sizing: border-box !important; }\n  [data-shortcut-modal="settings"] {\n    position: fixed !important;\n    inset: 0 !important;\n    width: 100vw !important;\n    max-width: none !important;\n    height: 100% !important;\n    max-height: none !important;\n    margin: 0 !important;\n    border-radius: 0 !important;\n    background: var(--dms-bg-soft) !important;\n    display: flex !important;\n    flex-direction: column !important;\n    padding: calc(52px + env(safe-area-inset-top, 0px)) 0 0 !important;\n    overflow: hidden !important;\n  }\n  .dms-settings-chrome {\n    display: none;\n    position: fixed;\n    left: 0; right: 0; top: 0;\n    height: calc(52px + env(safe-area-inset-top, 0px));\n    padding-top: env(safe-area-inset-top, 0px);\n    box-sizing: border-box;\n    align-items: center;\n    justify-content: center;\n    background: var(--dms-bg);\n    border-bottom: 1px solid var(--dms-line);\n    z-index: 2147483000;\n  }\n  html.dms-settings-open .dms-settings-chrome { display: flex; }\n  .dms-settings-chrome .dms-settings-back {\n    position: absolute; left: 4px; top: 50%; transform: translateY(-50%);\n    width: 44px; height: 44px; border: 0; border-radius: 50%;\n    background: transparent; color: var(--dms-text);\n    display: inline-flex; align-items: center; justify-content: center;\n  }\n  .dms-settings-chrome .dms-settings-back:active { background: var(--dms-surface-2); }\n  .dms-settings-chrome .dms-settings-back svg { width: 22px; height: 22px; }\n  .dms-settings-chrome .dms-settings-title {\n    display: flex; align-items: center; gap: 7px;\n    font-size: 17px; font-weight: 600; color: var(--dms-text); line-height: 1;\n  }\n  .dms-settings-chrome .dms-settings-title svg { width: 19px; height: 19px; }\n\n  /* settings list page */\n  [data-shortcut-modal="settings"] > [class*="_nav"] {\n    display: flex !important; flex-direction: column !important;\n    width: 100% !important;\n    padding: 8px 12px calc(16px + env(safe-area-inset-bottom, 0px)) !important;\n    background: transparent !important;\n    border-bottom: 0 !important;\n    overflow: auto !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navTitle"] { display: none !important; }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navList"] {\n    display: flex !important; flex-direction: column !important;\n    width: 100% !important; gap: 0 !important;\n    overflow: hidden !important; padding: 0 !important;\n    background: var(--dms-surface) !important;\n    border-radius: 12px !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"] {\n    width: 100% !important; height: 46px !important;\n    flex: 0 0 auto !important;\n    display: flex !important; flex-direction: row !important;\n    align-items: center !important; justify-content: flex-start !important;\n    gap: 10px !important;\n    padding: 0 12px !important;\n    border-radius: 0 !important;\n    background: transparent !important;\n    border-bottom: 1px solid var(--dms-line) !important;\n    color: var(--dms-text) !important;\n    font-size: 15px !important; font-weight: 400 !important;\n    border: 0 !important;\n    position: relative !important;\n    white-space: nowrap !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"] svg {\n    width: 20px !important; height: 20px !important;\n    flex: 0 0 20px !important; color: var(--dms-text) !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"]::after {\n    content: "\\203A"; position: absolute; right: 12px;\n    font-size: 20px; line-height: 1; color: var(--dms-text-2);\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"][class*="_active"] {\n    background: transparent !important; color: var(--dms-text) !important; font-weight: 400 !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"]:last-child { border-bottom: 0 !important; }\n\n  /* mode switches only touch direct children so nested dialogs stay usable */\n  html.dms-settings-list [data-shortcut-modal="settings"] > [class*="_content"] { display: none !important; }\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_nav"] { display: none !important; }\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_content"] {\n    display: flex !important; flex-direction: column !important;\n    flex: 1 1 auto !important; min-height: 0 !important; overflow: hidden !important;\n  }\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_header"] { display: none !important; }\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"] {\n    flex: 1 1 auto !important;\n    overflow-y: auto !important;\n    overflow-x: hidden !important;\n    padding: 8px 12px calc(20px + env(safe-area-inset-bottom, 0px)) !important;\n  }\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"]::-webkit-scrollbar,\n  [data-shortcut-modal="settings"] > [class*="_nav"]::-webkit-scrollbar { width: 0 !important; height: 0 !important; }\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"] { scrollbar-width: none !important; }\n\n  [data-shortcut-modal="settings"] [class*="_section"] {\n    width: 100% !important;\n    background: var(--dms-surface) !important;\n    border-radius: 12px !important;\n    margin: 0 0 6px !important;\n    padding: 0 12px !important;\n    overflow: hidden !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_section"] > * {\n    border-bottom: 1px solid var(--dms-line) !important;\n    padding: 10px 0 !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_section"] > *:last-child { border-bottom: 0 !important; }\n  [data-shortcut-modal="settings"] [class*="_group"] { padding: 10px 0 !important; }\n  [data-shortcut-modal="settings"] [class*="_group"] [class*="_title"] {\n    font-size: 12.5px !important; color: var(--dms-text-2) !important; font-weight: 500 !important;\n    margin-bottom: 6px !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_row"] {\n    display: flex !important; align-items: center !important; gap: 10px !important;\n    width: 100% !important; max-width: 100% !important; min-width: 0 !important;\n  }\n  [class*="_rowText"] { flex: 1 1 auto !important; min-width: 0 !important; align-items: flex-start !important; padding-right: 0 !important; }\n  [class*="_rowText"] [class*="_title"], [class*="_rowText"] [class*="_desc"] {\n    text-align: left !important; margin-left: 0 !important;\n    width: auto !important; max-width: 100% !important;\n  }\n  [class*="_rowText"] [class*="_desc"] { flex: 1 1 auto !important; align-self: stretch !important; width: 100% !important; }\n  [data-shortcut-modal="settings"] [class*="_title"] {\n    font-size: 14.5px !important; color: var(--dms-text) !important; font-weight: 500 !important;\n    text-align: left !important; white-space: normal !important;\n  }\n  body [data-shortcut-modal="settings"] [class*="_rowText"] { align-items: flex-start !important; }\n  body [data-shortcut-modal="settings"] [class*="_title"] { text-align: left !important; width: 100% !important; }\n  [class*="_desc"], [class*="_description"] {\n    font-size: 12px !important; color: var(--dms-text-2) !important;\n    margin-top: 2px !important; line-height: 1.4 !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_selector"] {\n    flex: 0 0 auto !important;\n    width: auto !important;\n    max-width: 62% !important;\n    min-width: 0 !important;\n    height: 30px !important;\n    padding: 0 9px !important;\n    font-size: 12px !important;\n    display: inline-flex !important; align-items: center !important;\n    color: var(--dms-text-2) !important;\n    white-space: nowrap !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_cubeRow"] { display: flex !important; flex-direction: row !important; gap: 8px !important; }\n  [data-shortcut-modal="settings"] [class*="_themeCube"] {\n    flex: 1 1 0 !important; min-width: 0 !important; width: auto !important;\n    white-space: nowrap !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_themeCube"]:not([class*="_selected"]) {\n    background: transparent !important;\n  }\n\n  /* provider/model editor page */\n  [data-shortcut-modal="settings"] [class*="_editorActions"] {\n    display: flex !important; flex-wrap: wrap !important; gap: 8px !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_modelRow"] {\n    display: flex !important; flex-wrap: wrap !important; gap: 8px !important;\n    width: 100% !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_modelRow"] input {\n    flex: 1 1 110px !important; min-width: 0 !important;\n    font-size: 12px !important; padding: 0 6px !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_modelRow"] [class*="_iconButton"] {\n    width: 24px !important; height: 24px !important; min-width: 24px !important; padding: 0 !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_modelEntry"] { width: 100% !important; }\n  [data-shortcut-modal="settings"] [class*="_addModelButton"],\n  [data-shortcut-modal="settings"] [class*="_addButton"] {\n    width: auto !important; height: auto !important; min-width: 0 !important;\n    white-space: nowrap !important;\n  }\n  [data-shortcut-modal="settings"] [class*="_modelList"],\n  [data-shortcut-modal="settings"] [class*="_customizedBody"] { width: 100% !important; }\n\n  /* long model names wrap instead of clipping */\n  [role=menu] [role=menuitem], [class*="_modelItem"], [class*="_optionItem"] { white-space: normal !important; height: auto !important; min-height: 40px !important; }\n  [role=menu] [role=menuitem] [class*="_label"], [class*="_modelItem"] [class*="_label"] { white-space: normal !important; line-height: 1.35 !important; }\n\n  /* the host sidebar is kept mounted (preloaded) and pinned off-screen; opening slides it in */\n  html.dms-preload-left [class*="_frame"] > [class*="_sidebarCol"] {\n    /* Keep the host sidebar expanded and *under* the opaque page. It is fully\n       visible to the renderer (so plugins/sidebar content paint before the\n       first touch) but covered by centerCol; opening only raises its z-index.\n       Off-screen/opacity-0 preloads skipped paint and produced a white first frame. */\n    transform: none !important;\n    opacity: 1 !important;\n    z-index: 0 !important;\n    animation: none !important;\n    transition: none !important;\n    pointer-events: none !important;\n  }\n  html.dms-preload-left [class*="_centerCol"] {\n    position: relative !important;\n    z-index: 1 !important;\n    background: var(--dms-bg) !important;\n    /* Promote the page once at phone-layout time. The right drawer pushes this\n       layer; without a pre-existing compositor layer the first transform frame\n       re-rasterized a large conversation DOM and stalled mid-animation. */\n    will-change: transform !important;\n    backface-visibility: hidden !important;\n  }\n  html.dms-left-hide [class*="_frame"] > [class*="_sidebarCol"] {\n    transform: translateX(-100%) !important;\n    animation: none !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n  }\n  /* while a gesture mounts a drawer, pin it off-screen until our compositor frame lands */\n  html.dms-gesture-arming [class*="_frame"] > [class*="_sidebarCol"] {\n    animation: none !important;\n    transition: none !important;\n    transform: translateX(-100%) !important;\n    will-change: transform !important;\n  }\n  html.dms-gesture-arming-right [class*="_frame"] > [class*="_rightbarCol"] {\n    animation: none !important;\n    transition: none !important;\n    transform: translateX(100%) !important;\n    will-change: transform !important;\n  }\n  /* The preload rules keep the host sidebar under the page; while the drawer is\n     open it must come back above the pushed page. Overriding the combined state\n     (instead of removing dms-preload-left on open) avoids a class churn that\n     re-ran the host animation and flashed white on fast drawer switches. */\n  html.dms-preload-left.dms-left-open [class*="_frame"] > [class*="_sidebarCol"],\n  html.dms-left-open [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] {\n    z-index: 90 !important;\n    pointer-events: auto !important;\n    animation: none !important;\n    transition: none !important;\n    transform: none !important;\n  }\n\n  /* Right drawer follows the left one: the host panel is preloaded and stays\n     mounted off-screen; opening/closing only moves it (state = plugin rightVisible). */\n  html.dms-preload-right [class*="_frame"] > [class*="_rightbarCol"] {\n    transform: translateX(100%) !important;\n    opacity: 1 !important;\n    z-index: 0 !important;\n    animation: none !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n    pointer-events: none !important;\n  }\n  html.dms-preload-right [class*="_centerCol"] {\n    position: relative !important;\n    z-index: 1 !important;\n    background: var(--dms-bg) !important;\n  }\n  html.dms-preload-right.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] {\n    transform: translateX(0) !important;\n    pointer-events: auto !important;\n    z-index: 90 !important;\n  }\n\n';
+  var settings_default = '  /* ---------- settings ---------------------------------------------------- */\r\n  [data-shortcut-modal="settings"], [data-shortcut-modal="settings"] * { box-sizing: border-box !important; }\r\n  [data-shortcut-modal="settings"] {\r\n    position: fixed !important;\r\n    inset: 0 !important;\r\n    width: 100vw !important;\r\n    max-width: none !important;\r\n    height: 100% !important;\r\n    max-height: none !important;\r\n    margin: 0 !important;\r\n    border-radius: 0 !important;\r\n    background: var(--dms-bg-soft) !important;\r\n    display: flex !important;\r\n    flex-direction: column !important;\r\n    padding: calc(52px + env(safe-area-inset-top, 0px)) 0 0 !important;\r\n    overflow: hidden !important;\r\n  }\r\n  .dms-settings-chrome {\r\n    display: none;\r\n    position: fixed;\r\n    left: 0; right: 0; top: 0;\r\n    height: calc(52px + env(safe-area-inset-top, 0px));\r\n    padding-top: env(safe-area-inset-top, 0px);\r\n    box-sizing: border-box;\r\n    align-items: center;\r\n    justify-content: center;\r\n    background: var(--dms-bg);\r\n    border-bottom: 1px solid var(--dms-line);\r\n    z-index: 2147483000;\r\n  }\r\n  html.dms-settings-open .dms-settings-chrome { display: flex; }\r\n  .dms-settings-chrome .dms-settings-back {\r\n    position: absolute; left: 4px; top: 50%; transform: translateY(-50%);\r\n    width: 44px; height: 44px; border: 0; border-radius: 50%;\r\n    background: transparent; color: var(--dms-text);\r\n    display: inline-flex; align-items: center; justify-content: center;\r\n  }\r\n  .dms-settings-chrome .dms-settings-back:active { background: var(--dms-surface-2); }\r\n  .dms-settings-chrome .dms-settings-back svg { width: 22px; height: 22px; }\r\n  .dms-settings-chrome .dms-settings-title {\r\n    display: flex; align-items: center; gap: 7px;\r\n    font-size: 17px; font-weight: 600; color: var(--dms-text); line-height: 1;\r\n  }\r\n  .dms-settings-chrome .dms-settings-title svg { width: 19px; height: 19px; }\r\n\r\n  /* settings list page */\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] {\r\n    display: flex !important; flex-direction: column !important;\r\n    width: 100% !important;\r\n    padding: 8px 12px calc(16px + env(safe-area-inset-bottom, 0px)) !important;\r\n    background: transparent !important;\r\n    border-bottom: 0 !important;\r\n    overflow: auto !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navTitle"] { display: none !important; }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navList"] {\r\n    display: flex !important; flex-direction: column !important;\r\n    width: 100% !important; gap: 0 !important;\r\n    overflow: hidden !important; padding: 0 !important;\r\n    background: var(--dms-surface) !important;\r\n    border-radius: 12px !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"] {\r\n    width: 100% !important; height: 46px !important;\r\n    flex: 0 0 auto !important;\r\n    display: flex !important; flex-direction: row !important;\r\n    align-items: center !important; justify-content: flex-start !important;\r\n    gap: 10px !important;\r\n    padding: 0 12px !important;\r\n    border-radius: 0 !important;\r\n    background: transparent !important;\r\n    border-bottom: 1px solid var(--dms-line) !important;\r\n    color: var(--dms-text) !important;\r\n    font-size: 15px !important; font-weight: 400 !important;\r\n    border: 0 !important;\r\n    position: relative !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"] svg {\r\n    width: 20px !important; height: 20px !important;\r\n    flex: 0 0 20px !important; color: var(--dms-text) !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"]::after {\r\n    content: "\\203A"; position: absolute; right: 12px;\r\n    font-size: 20px; line-height: 1; color: var(--dms-text-2);\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"][class*="_active"] {\r\n    background: transparent !important; color: var(--dms-text) !important; font-weight: 400 !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_nav"] [class*="_navCell"]:last-child { border-bottom: 0 !important; }\r\n\r\n  /* mode switches only touch direct children so nested dialogs stay usable */\r\n  html.dms-settings-list [data-shortcut-modal="settings"] > [class*="_content"] { display: none !important; }\r\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_nav"] { display: none !important; }\r\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_content"] {\r\n    display: flex !important; flex-direction: column !important;\r\n    flex: 1 1 auto !important; min-height: 0 !important; overflow: hidden !important;\r\n  }\r\n  html.dms-settings-section [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_header"] { display: none !important; }\r\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"] {\r\n    flex: 1 1 auto !important;\r\n    overflow-y: auto !important;\r\n    overflow-x: hidden !important;\r\n    padding: 8px 12px calc(20px + env(safe-area-inset-bottom, 0px)) !important;\r\n  }\r\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"]::-webkit-scrollbar,\r\n  [data-shortcut-modal="settings"] > [class*="_nav"]::-webkit-scrollbar { width: 0 !important; height: 0 !important; }\r\n  [data-shortcut-modal="settings"] > [class*="_content"] > [class*="_options"] { scrollbar-width: none !important; }\r\n\r\n  [data-shortcut-modal="settings"] [class*="_section"] {\r\n    width: 100% !important;\r\n    background: var(--dms-surface) !important;\r\n    border-radius: 12px !important;\r\n    margin: 0 0 6px !important;\r\n    padding: 0 12px !important;\r\n    overflow: hidden !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_section"] > * {\r\n    border-bottom: 1px solid var(--dms-line) !important;\r\n    padding: 10px 0 !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_section"] > *:last-child { border-bottom: 0 !important; }\r\n  [data-shortcut-modal="settings"] [class*="_group"] { padding: 10px 0 !important; }\r\n  [data-shortcut-modal="settings"] [class*="_group"] [class*="_title"] {\r\n    font-size: 12.5px !important; color: var(--dms-text-2) !important; font-weight: 500 !important;\r\n    margin-bottom: 6px !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_row"] {\r\n    display: flex !important; align-items: center !important; gap: 10px !important;\r\n    width: 100% !important; max-width: 100% !important; min-width: 0 !important;\r\n  }\r\n  [class*="_rowText"] { flex: 1 1 auto !important; min-width: 0 !important; align-items: flex-start !important; padding-right: 0 !important; }\r\n  [class*="_rowText"] [class*="_title"], [class*="_rowText"] [class*="_desc"] {\r\n    text-align: left !important; margin-left: 0 !important;\r\n    width: auto !important; max-width: 100% !important;\r\n  }\r\n  [class*="_rowText"] [class*="_desc"] { flex: 1 1 auto !important; align-self: stretch !important; width: 100% !important; }\r\n  [data-shortcut-modal="settings"] [class*="_title"] {\r\n    font-size: 14.5px !important; color: var(--dms-text) !important; font-weight: 500 !important;\r\n    text-align: left !important; white-space: normal !important;\r\n  }\r\n  body [data-shortcut-modal="settings"] [class*="_rowText"] { align-items: flex-start !important; }\r\n  body [data-shortcut-modal="settings"] [class*="_title"] { text-align: left !important; width: 100% !important; }\r\n  [class*="_desc"], [class*="_description"] {\r\n    font-size: 12px !important; color: var(--dms-text-2) !important;\r\n    margin-top: 2px !important; line-height: 1.4 !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_selector"] {\r\n    flex: 0 0 auto !important;\r\n    width: auto !important;\r\n    max-width: 62% !important;\r\n    min-width: 0 !important;\r\n    height: 30px !important;\r\n    padding: 0 9px !important;\r\n    font-size: 12px !important;\r\n    display: inline-flex !important; align-items: center !important;\r\n    color: var(--dms-text-2) !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_cubeRow"] { display: flex !important; flex-direction: row !important; gap: 8px !important; }\r\n  [data-shortcut-modal="settings"] [class*="_themeCube"] {\r\n    flex: 1 1 0 !important; min-width: 0 !important; width: auto !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_themeCube"]:not([class*="_selected"]) {\r\n    background: transparent !important;\r\n  }\r\n\r\n  /* provider/model editor page */\r\n  [data-shortcut-modal="settings"] [class*="_editorActions"] {\r\n    display: flex !important; flex-wrap: wrap !important; gap: 8px !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_modelRow"] {\r\n    display: flex !important; flex-wrap: wrap !important; gap: 8px !important;\r\n    width: 100% !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_modelRow"] input {\r\n    flex: 1 1 110px !important; min-width: 0 !important;\r\n    font-size: 12px !important; padding: 0 6px !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_modelRow"] [class*="_iconButton"] {\r\n    width: 24px !important; height: 24px !important; min-width: 24px !important; padding: 0 !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_modelEntry"] { width: 100% !important; }\r\n  [data-shortcut-modal="settings"] [class*="_addModelButton"],\r\n  [data-shortcut-modal="settings"] [class*="_addButton"] {\r\n    width: auto !important; height: auto !important; min-width: 0 !important;\r\n    white-space: nowrap !important;\r\n  }\r\n  [data-shortcut-modal="settings"] [class*="_modelList"],\r\n  [data-shortcut-modal="settings"] [class*="_customizedBody"] { width: 100% !important; }\r\n\r\n  /* long model names wrap instead of clipping */\r\n  [role=menu] [role=menuitem], [class*="_modelItem"], [class*="_optionItem"] { white-space: normal !important; height: auto !important; min-height: 40px !important; }\r\n  [role=menu] [role=menuitem] [class*="_label"], [class*="_modelItem"] [class*="_label"] { white-space: normal !important; line-height: 1.35 !important; }\r\n\r\n  /* the host sidebar is kept mounted (preloaded) and pinned off-screen; opening slides it in */\r\n  html.dms-preload-left [class*="_frame"] > [class*="_sidebarCol"] {\r\n    /* Keep the host sidebar expanded and *under* the opaque page. It is fully\r\n       visible to the renderer (so plugins/sidebar content paint before the\r\n       first touch) but covered by centerCol; opening only raises its z-index.\r\n       Off-screen/opacity-0 preloads skipped paint and produced a white first frame. */\r\n    transform: none !important;\r\n    opacity: 1 !important;\r\n    z-index: 0 !important;\r\n    animation: none !important;\r\n    transition: none !important;\r\n    pointer-events: none !important;\r\n  }\r\n  html.dms-preload-left [class*="_centerCol"] {\r\n    position: relative !important;\r\n    z-index: 1 !important;\r\n    background: var(--dms-bg) !important;\r\n    /* Promote the page once at phone-layout time. The right drawer pushes this\r\n       layer; without a pre-existing compositor layer the first transform frame\r\n       re-rasterized a large conversation DOM and stalled mid-animation. */\r\n    will-change: transform !important;\r\n    backface-visibility: hidden !important;\r\n  }\r\n  html.dms-left-hide [class*="_frame"] > [class*="_sidebarCol"] {\r\n    transform: translateX(-100%) !important;\r\n    animation: none !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n  }\r\n  /* while a gesture mounts a drawer, pin it off-screen until our compositor frame lands */\r\n  html.dms-gesture-arming [class*="_frame"] > [class*="_sidebarCol"] {\r\n    animation: none !important;\r\n    transition: none !important;\r\n    transform: translateX(-100%) !important;\r\n    will-change: transform !important;\r\n  }\r\n  html.dms-gesture-arming-right [class*="_frame"] > [class*="_rightbarCol"] {\r\n    animation: none !important;\r\n    transition: none !important;\r\n    transform: translateX(100%) !important;\r\n    will-change: transform !important;\r\n  }\r\n  /* The preload rules keep the host sidebar under the page; while the drawer is\r\n     open it must come back above the pushed page. Overriding the combined state\r\n     (instead of removing dms-preload-left on open) avoids a class churn that\r\n     re-ran the host animation and flashed white on fast drawer switches. */\r\n  html.dms-preload-left.dms-left-open [class*="_frame"] > [class*="_sidebarCol"],\r\n  html.dms-left-open [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] {\r\n    z-index: 90 !important;\r\n    pointer-events: auto !important;\r\n    animation: none !important;\r\n    transition: none !important;\r\n    transform: none !important;\r\n  }\r\n\r\n  /* Right drawer follows the left one: the host panel is preloaded and stays\r\n     mounted off-screen; opening/closing only moves it (state = plugin rightVisible). */\r\n  html.dms-preload-right [class*="_frame"] > [class*="_rightbarCol"] {\r\n    transform: translateX(100%) !important;\r\n    opacity: 1 !important;\r\n    z-index: 0 !important;\r\n    animation: none !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n    pointer-events: none !important;\r\n  }\r\n  html.dms-preload-right [class*="_centerCol"] {\r\n    position: relative !important;\r\n    z-index: 1 !important;\r\n    background: var(--dms-bg) !important;\r\n  }\r\n  html.dms-preload-right.dms-right-open [class*="_frame"] > [class*="_rightbarCol"],\r\n  html.dms-right-open [class*="_frame"] > [class*="_rightbarCol"] {\r\n    transform: translateX(0) !important;\r\n    pointer-events: auto !important;\r\n    z-index: 90 !important;\r\n  }\r\n\r\n';
 
   // src/styles/toast.css
-  var toast_default = '  /* ---------- toast ------------------------------------------------------- */\n  .dms-toast {\n    position: fixed; left: 50%;\n    bottom: calc(190px + env(safe-area-inset-bottom, 0px));\n    transform: translateX(-50%) translateY(8px);\n    max-width: 76vw;\n    padding: 9px 16px;\n    border-radius: 999px;\n    background: rgba(22, 24, 30, 0.86);\n    color: #fff;\n    font-size: 13px;\n    line-height: 1.2;\n    white-space: nowrap;\n    z-index: 2147483600;\n    opacity: 0; pointer-events: none;\n    transition: opacity 0.16s ease, transform 0.16s ease;\n  }\n  .dms-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }\n\n  html.dms-gesture-opened [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] { animation: none !important; }\n\n';
+  var toast_default = '  /* ---------- toast ------------------------------------------------------- */\r\n  .dms-toast {\r\n    position: fixed; left: 50%;\r\n    bottom: calc(190px + env(safe-area-inset-bottom, 0px));\r\n    transform: translateX(-50%) translateY(8px);\r\n    max-width: 76vw;\r\n    padding: 9px 16px;\r\n    border-radius: 999px;\r\n    background: rgba(22, 24, 30, 0.86);\r\n    color: #fff;\r\n    font-size: 13px;\r\n    line-height: 1.2;\r\n    white-space: nowrap;\r\n    z-index: 2147483600;\r\n    opacity: 0; pointer-events: none;\r\n    transition: opacity 0.16s ease, transform 0.16s ease;\r\n  }\r\n  .dms-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }\r\n\r\n  html.dms-gesture-opened [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"] { animation: none !important; }\r\n\r\n';
 
   // src/styles/gestures.css
-  var gestures_default = '  /* ---------- drawer drag (direct compositor transforms) ------------------ */\n  html.dms-dragging-left [class*="_centerCol"],\n  html.dms-dragging-right [class*="_centerCol"],\n  html.dms-drag-close-left [class*="_centerCol"],\n  html.dms-drag-close-right [class*="_centerCol"] { transition: none !important; }\n  html.dms-dragging-left [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"],\n  html.dms-drag-close-left [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"],\n  html.dms-dragging-right [class*="_frame"] > [class*="_rightbarCol"],\n  html.dms-drag-close-right [class*="_frame"] > [class*="_rightbarCol"] {\n    animation: none !important;\n    transition: none !important;\n    will-change: transform !important;\n    backface-visibility: hidden !important;\n  }\n\n  /* hover-only message actions stay reachable on touch; sidebar rows open theirs on long-press */\n  [class*="_message"] [class*="_actions"],\n  [class*="_message"] [class*="_actionBar"] {\n    opacity: 1 !important;\n    visibility: visible !important;\n  }\n\n';
+  var gestures_default = '  /* ---------- drawer drag (direct compositor transforms) ------------------ */\r\n  html.dms-dragging-left [class*="_centerCol"],\r\n  html.dms-dragging-right [class*="_centerCol"],\r\n  html.dms-drag-close-left [class*="_centerCol"],\r\n  html.dms-drag-close-right [class*="_centerCol"] { transition: none !important; }\r\n  html.dms-dragging-left [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"],\r\n  html.dms-drag-close-left [class*="_frame"]:not([data-sidebar-collapsed]) > [class*="_sidebarCol"],\r\n  html.dms-dragging-right [class*="_frame"] > [class*="_rightbarCol"],\r\n  html.dms-drag-close-right [class*="_frame"] > [class*="_rightbarCol"] {\r\n    animation: none !important;\r\n    transition: none !important;\r\n    will-change: transform !important;\r\n    backface-visibility: hidden !important;\r\n  }\r\n\r\n  /* hover-only message actions stay reachable on touch; sidebar rows open theirs on long-press */\r\n  [class*="_message"] [class*="_actions"],\r\n  [class*="_message"] [class*="_actionBar"] {\r\n    opacity: 1 !important;\r\n    visibility: visible !important;\r\n  }\r\n\r\n';
 
   // src/styles/attach-sheet.css
-  var attach_sheet_default = '  /* ---------- composer attach sheet --------------------------------------- */\n  .dms-attach-backdrop {\n    display: block;\n    position: fixed; inset: 0; z-index: 1040;\n    background: transparent;\n    opacity: 0; pointer-events: none;\n    transition: opacity 0.2s ease-out;\n  }\n  html.dms-attach-open .dms-attach-backdrop { opacity: 1; }\n  .dms-attach-sheet {\n    display: flex;\n    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1049;\n    transform: translateY(105%); opacity: 1; pointer-events: none;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);\n    background: var(--dms-bg);\n    border-radius: 18px 18px 0 0;\n    /* 0.6.16: restore the 0.6.13 size/spacing; no upward shadow and no grabber\n       line (both read as the dark line the user flagged above \u6700\u8FD1\u7167\u7247). */\n    padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px));\n    box-shadow: none;\n    border: 0;\n    flex-direction: column; gap: 12px;\n    max-height: 50vh;\n    /* If the available height cannot fit the strip + action row, scroll inside\n       the sheet instead of squashing the content (\u7528\u6237 \u4FEE\u6B631.3). */\n    overflow-y: auto;\n    overscroll-behavior: contain;\n    -webkit-overflow-scrolling: touch;\n    scrollbar-width: none;\n  }\n  .dms-attach-sheet::-webkit-scrollbar { display: none; }\n  .dms-attach-recent, .dms-attach-actions { flex: 0 0 auto; }\n  html.dms-attach-open .dms-attach-sheet { transform: translateY(0); pointer-events: auto; }\n  .dms-attach-recent { display: flex; flex-direction: column; gap: 7px; }\n  .dms-attach-recent[hidden] { display: none !important; }\n  .dms-attach-recent-title { font-size: 12px; line-height: 1.25; color: var(--dms-text-2); padding: 0 2px; }\n  .dms-attach-recent-strip {\n    display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;\n    padding: 2px 2px 4px; min-height: 72px; scrollbar-width: none;\n    scroll-behavior: auto;\n  }\n  .dms-attach-recent-strip::-webkit-scrollbar { display: none; }\n  .dms-attach-loading {\n    font-size: 12px; color: var(--dms-text-2);\n    display: flex; align-items: center;\n    min-height: 72px; width: 100%;\n    pointer-events: none;\n  }\n  .dms-attach-photo {\n    position: relative;\n    flex: 0 0 72px; width: 72px; height: 72px; padding: 0;\n    border: 0; border-radius: 10px; overflow: hidden; background: var(--dms-surface-2);\n  }\n  .dms-photo-check {\n    position: absolute; top: 4px; right: 4px;\n    width: 17px; height: 17px; border-radius: 50%;\n    background: rgba(0, 0, 0, 0.34); border: 1.5px solid rgba(255, 255, 255, 0.95);\n    color: transparent; display: flex; align-items: center; justify-content: center;\n    box-sizing: border-box;\n  }\n  .dms-attach-photo.selected .dms-photo-check { background: var(--dms-blue); color: #fff; border-color: #fff; }\n  .dms-attach-photo.selected img { opacity: 0.86; }\n  /* host attachment remove control: keep it the official compact size */\n  [class*="_remove"] {\n    width: 18px !important; height: 18px !important;\n    min-width: 18px !important; min-height: 18px !important;\n    font-size: 11px !important; line-height: 1 !important;\n  }\n  [class*="_remove"] svg { width: 10px !important; height: 10px !important; }\n  .dms-attach-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }\n  .dms-attach-recent-strip, .dms-attach-photo, .dms-attach-photo img {\n    -webkit-touch-callout: none;\n    -webkit-user-select: none;\n    user-select: none;\n  }\n  .dms-attach-actions { display: flex; gap: 10px; }\n  .dms-attach-action {\n    flex: 1 1 0; min-width: 0;\n    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;\n    height: 86px; border: 0; border-radius: 14px;\n    background: var(--dms-surface-2); color: var(--dms-text);\n    font-size: 13px; font-weight: 500;\n  }\n  .dms-attach-action:active { background: var(--dms-line); }\n  .dms-attach-ico { display: inline-flex; color: var(--dms-text); }\n  .dms-attach-ico svg { width: 24px; height: 24px; }\n\n  /* the host "+" rotates into an "x" in step with the sheet (same 0.24s curve) */\n  button[data-dms-plus="1"] svg {\n    transform: rotate(0deg) !important;\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\n  }\n  html.dms-attach-open button[data-dms-plus="1"] svg { transform: rotate(45deg) !important; }\n\n';
+  var attach_sheet_default = '  /* ---------- composer attach sheet --------------------------------------- */\r\n  .dms-attach-backdrop {\r\n    display: block;\r\n    position: fixed; inset: 0; z-index: 1040;\r\n    background: transparent;\r\n    opacity: 0; pointer-events: none;\r\n    transition: opacity 0.2s ease-out;\r\n  }\r\n  html.dms-attach-open .dms-attach-backdrop { opacity: 1; }\r\n  .dms-attach-sheet {\r\n    display: flex;\r\n    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1049;\r\n    transform: translateY(105%); opacity: 1; pointer-events: none;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);\r\n    background: var(--dms-bg);\r\n    border-radius: 18px 18px 0 0;\r\n    /* 0.6.16: restore the 0.6.13 size/spacing; no upward shadow and no grabber\r\n       line (both read as the dark line the user flagged above \u6700\u8FD1\u7167\u7247). */\r\n    padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px));\r\n    box-shadow: none;\r\n    border: 0;\r\n    flex-direction: column; gap: 12px;\r\n    max-height: 50vh;\r\n    /* If the available height cannot fit the strip + action row, scroll inside\r\n       the sheet instead of squashing the content (\u7528\u6237 \u4FEE\u6B631.3). */\r\n    overflow-y: auto;\r\n    overscroll-behavior: contain;\r\n    -webkit-overflow-scrolling: touch;\r\n    scrollbar-width: none;\r\n  }\r\n  .dms-attach-sheet::-webkit-scrollbar { display: none; }\r\n  .dms-attach-recent, .dms-attach-actions { flex: 0 0 auto; }\r\n  html.dms-attach-open .dms-attach-sheet { transform: translateY(0); pointer-events: auto; }\r\n  .dms-attach-recent { display: flex; flex-direction: column; gap: 7px; }\r\n  .dms-attach-recent[hidden] { display: none !important; }\r\n  .dms-attach-recent-title { font-size: 12px; line-height: 1.25; color: var(--dms-text-2); padding: 0 2px; }\r\n  .dms-attach-recent-strip {\r\n    display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;\r\n    padding: 2px 2px 4px; min-height: 72px; scrollbar-width: none;\r\n    scroll-behavior: auto;\r\n  }\r\n  .dms-attach-recent-strip::-webkit-scrollbar { display: none; }\r\n  .dms-attach-loading {\r\n    font-size: 12px; color: var(--dms-text-2);\r\n    display: flex; align-items: center;\r\n    min-height: 72px; width: 100%;\r\n    pointer-events: none;\r\n  }\r\n  .dms-attach-photo {\r\n    position: relative;\r\n    flex: 0 0 72px; width: 72px; height: 72px; padding: 0;\r\n    border: 0; border-radius: 10px; overflow: hidden; background: var(--dms-surface-2);\r\n  }\r\n  .dms-photo-check {\r\n    position: absolute; top: 4px; right: 4px;\r\n    width: 17px; height: 17px; border-radius: 50%;\r\n    background: rgba(0, 0, 0, 0.34); border: 1.5px solid rgba(255, 255, 255, 0.95);\r\n    color: transparent; display: flex; align-items: center; justify-content: center;\r\n    box-sizing: border-box;\r\n  }\r\n  .dms-attach-photo.selected .dms-photo-check { background: var(--dms-blue); color: #fff; border-color: #fff; }\r\n  .dms-attach-photo.selected img { opacity: 0.86; }\r\n  /* host attachment remove control: keep it the official compact size */\r\n  [class*="_remove"] {\r\n    width: 18px !important; height: 18px !important;\r\n    min-width: 18px !important; min-height: 18px !important;\r\n    font-size: 11px !important; line-height: 1 !important;\r\n  }\r\n  [class*="_remove"] svg { width: 10px !important; height: 10px !important; }\r\n  .dms-attach-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }\r\n  .dms-attach-recent-strip, .dms-attach-photo, .dms-attach-photo img {\r\n    -webkit-touch-callout: none;\r\n    -webkit-user-select: none;\r\n    user-select: none;\r\n  }\r\n  .dms-attach-actions { display: flex; gap: 10px; }\r\n  .dms-attach-action {\r\n    flex: 1 1 0; min-width: 0;\r\n    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;\r\n    height: 86px; border: 0; border-radius: 14px;\r\n    background: var(--dms-surface-2); color: var(--dms-text);\r\n    font-size: 13px; font-weight: 500;\r\n  }\r\n  .dms-attach-action:active { background: var(--dms-line); }\r\n  .dms-attach-ico { display: inline-flex; color: var(--dms-text); }\r\n  .dms-attach-ico svg { width: 24px; height: 24px; }\r\n\r\n  /* the host "+" rotates into an "x" in step with the sheet (same 0.24s curve) */\r\n  button[data-dms-plus="1"] svg {\r\n    transform: rotate(0deg) !important;\r\n    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r\n  }\r\n  html.dms-attach-open button[data-dms-plus="1"] svg { transform: rotate(45deg) !important; }\r\n\r\n';
 
   // src/styles/keyboard.css
-  var keyboard_default = `  /* keyboard-inset fallback (only when the host did not resize the layout) */
-  html.dms-kb-open [data-composer-seat] {
-    transform: translateY(calc(-1 * var(--dms-kb, 0px))) !important;
-    transition: transform 0.16s ease-out !important;
-  }
-  html.dms-attach-open [data-composer-seat] {
-    transform: translateY(calc(-1 * var(--dms-sheet-h, 0px))) !important;
-    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-  }
-  /* The composer's shield/context popovers live inside centerCol and use host
-     layer z-index 1100. While the sheet is open drop centerCol's own stacking
-     context so those popovers can paint above the sheet instead of being
-     clipped behind it (\u4E0B\u65B9\u754C\u9762\u4E0D\u6D88\u5931\u3001\u6309\u94AE GUI \u53EF\u89C1). */
-  html.dms-attach-open [class*="_centerCol"] { z-index: auto !important; }
-  /* the sheet must be gone in the same frame the keyboard starts opening */
-  html.dms-sheet-instant .dms-attach-sheet,
-  html.dms-sheet-instant [data-composer-seat],
-  html.dms-sheet-instant button[data-dms-plus="1"] svg { transition: none !important; }
-  @keyframes dms-drawer-in {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(0); }
-  }
-}
+  var keyboard_default = `  /* keyboard-inset fallback (only when the host did not resize the layout) */\r
+  html.dms-kb-open [data-composer-seat] {\r
+    transform: translateY(calc(-1 * var(--dms-kb, 0px))) !important;\r
+    transition: transform 0.16s ease-out !important;\r
+  }\r
+  html.dms-attach-open [data-composer-seat] {\r
+    transform: translateY(calc(-1 * var(--dms-sheet-h, 0px))) !important;\r
+    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) !important;\r
+  }\r
+  /* The composer's shield/context popovers live inside centerCol and use host\r
+     layer z-index 1100. While the sheet is open drop centerCol's own stacking\r
+     context so those popovers can paint above the sheet instead of being\r
+     clipped behind it (\u4E0B\u65B9\u754C\u9762\u4E0D\u6D88\u5931\u3001\u6309\u94AE GUI \u53EF\u89C1). */\r
+  html.dms-attach-open [class*="_centerCol"] { z-index: auto !important; }\r
+  /* the sheet must be gone in the same frame the keyboard starts opening */\r
+  html.dms-sheet-instant .dms-attach-sheet,\r
+  html.dms-sheet-instant [data-composer-seat],\r
+  html.dms-sheet-instant button[data-dms-plus="1"] svg { transition: none !important; }\r
+  @keyframes dms-drawer-in {\r
+    from { transform: translateX(-100%); }\r
+    to { transform: translateX(0); }\r
+  }\r
+}\r
 `;
 
   // src/styles/desktop.css
-  var desktop_default = "@media (min-width: 1024px) {\n  .dms-iconbtn, .dms-scrim { display: none !important; }\n}";
+  var desktop_default = "@media (min-width: 1024px) {\r\n  .dms-iconbtn, .dms-scrim { display: none !important; }\r\n}";
 
   // src/core/style.js
   var CSS = [tokens_default, frame_default, left_drawer_default, right_drawer_default, right_drawer_loading_default, scrim_default, topbar_default, hero_default, composer_default, composer_stats_default, settings_default, toast_default, gestures_default, attach_sheet_default, keyboard_default, desktop_default].join("");
@@ -513,10 +518,6 @@ var DMS = (() => {
     requestMount("sync");
   }
   function repairLeftHost() {
-    if (state.leftRepairTimer !== 0) {
-      clearTimeout(state.leftRepairTimer);
-      state.leftRepairTimer = 0;
-    }
     if (!state.leftVisible) return;
     const root = document.documentElement;
     root.classList.remove("dms-left-hide");
@@ -564,10 +565,6 @@ var DMS = (() => {
     if (!state.leftVisible) return;
     state.leftVisible = false;
     dlog("close-visual", "animated=" + animated);
-    if (state.leftRepairTimer !== 0) {
-      clearTimeout(state.leftRepairTimer);
-      state.leftRepairTimer = 0;
-    }
     clearDrawerInline();
     const root = document.documentElement;
     root.classList.remove("dms-left-open");
@@ -657,29 +654,6 @@ var DMS = (() => {
     const text = (body.textContent || "").replace(/\s+/g, "");
     if (text.length > 2) return true;
     return body.querySelector("button, [class*='_entry'], [class*='_guide'], img, svg, input, textarea, iframe, canvas, video, [contenteditable='true']") !== null;
-  }
-  function showRightLoading() {
-  }
-  function hideRightLoading() {
-    if (state.rightLoadingEl !== null) {
-      state.rightLoadingEl.hidden = true;
-      state.rightLoadingEl.setAttribute("aria-hidden", "true");
-    }
-  }
-  function stopRightOpenWait(hideLoader) {
-    if (state.rightOpenWaitTimer !== 0) {
-      clearInterval(state.rightOpenWaitTimer);
-      state.rightOpenWaitTimer = 0;
-    }
-    if (hideLoader === true) hideRightLoading();
-  }
-  function startRightOpenWait() {
-    stopRightOpenWait(true);
-    state.rightWaitFallbackTried = false;
-    state.rightWaitTimedOut = false;
-    state.rightWaitStartedAt = 0;
-    document.documentElement.removeAttribute("data-dms-right-wait-timeout");
-    rlog("open-without-loader");
   }
   var clickHost = (el) => {
     if (el === null) return false;
@@ -813,8 +787,6 @@ var DMS = (() => {
   }
   function openRight() {
     state.rightVisible = true;
-    state.rightActivityAt = performance.now();
-    state.rightFullIntent = false;
     preloadGeneration += 1;
     if (state.rightPreloadState === "busy") state.rightPreloadState = "cancelled";
     restoreLeftToken += 1;
@@ -823,15 +795,10 @@ var DMS = (() => {
     document.documentElement.classList.add("dms-right-open");
     unlockRightPanel();
     rlog("open", "preloaded=" + document.documentElement.hasAttribute("data-dms-right-preloaded"));
-    startRightOpenWait();
   }
   function closeRight() {
     state.rightVisible = false;
-    state.rightFullIntent = false;
-    state.rightActivityAt = performance.now();
     emit("drawer-close", "right");
-    stopRightOpenWait(true);
-    state.rightWaitTimedOut = false;
     lockRightPanel();
     const root = document.documentElement;
     root.removeAttribute("data-dms-right-wait-timeout");
@@ -839,18 +806,12 @@ var DMS = (() => {
     root.classList.remove("dms-right-open");
     root.classList.add("dms-preload-right");
     restoreLeftAfterShift();
-    if (state.rightFallbackOpen) {
-      state.rightFallbackOpen = false;
-      clickHost($("[data-sidebar-right-toggle]"));
-    }
   }
   function toggleRightFullscreen() {
     const root = document.documentElement;
     if (root.classList.contains("dms-right-full")) {
-      state.rightFullIntent = false;
       root.classList.remove("dms-right-full");
     } else {
-      state.rightFullIntent = true;
       state.rightVisible = true;
       root.classList.remove("dms-preload-right");
       root.classList.add("dms-right-open");
@@ -890,7 +851,6 @@ var DMS = (() => {
     return null;
   }
   function exitRightFullscreen(closeDrawer) {
-    state.rightFullIntent = false;
     document.documentElement.classList.remove("dms-right-full");
     if (closeDrawer === true) closeRight();
   }
@@ -1034,10 +994,7 @@ var DMS = (() => {
       }
       if (expanded !== null) {
         state.rightVisible = true;
-        state.rightActivityAt = performance.now();
-        state.rightFullIntent = false;
         document.documentElement.classList.add("dms-right-open");
-        showRightLoading();
         try {
           openRight();
         } catch (error) {
@@ -1049,7 +1006,6 @@ var DMS = (() => {
       } catch (error) {
         state.rightVisible = true;
         document.documentElement.classList.add("dms-right-open");
-        startRightOpenWait();
       }
     }, true);
     return () => {
@@ -1747,9 +1703,6 @@ var DMS = (() => {
   function hostViewTabs() {
     return $$('[data-conversation-tabs] [role="tab"]');
   }
-  function hostViewTabLabel(tab) {
-    return (tab.textContent || "").trim();
-  }
   function closeSessionActionsMenu() {
     const anchor = sessionActionsAnchor();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -1764,45 +1717,43 @@ var DMS = (() => {
   }
   function injectViewTabsIntoMenu(menu) {
     if (menu === null) return false;
-    const menuText = menu.textContent || "";
-    if (!/下载 Session 日志|Download session log/.test(menuText)) return false;
-    const tabs = hostViewTabs().filter((tab) => /^(对话|轨迹|Chat|Trajectory)$/.test(hostViewTabLabel(tab)));
+    const tabs = hostViewTabs().filter((tab) => /^(对话|轨迹|Chat|Trajectory)$/.test(tab.textContent));
     if (tabs.length === 0) return false;
     const sample = menu.querySelector('[role="menuitem"]');
     if (sample === null) return false;
-    const signature = tabs.map((tab) => hostViewTabLabel(tab) + (tab.getAttribute("aria-selected") === "true" ? "1" : "0")).join("|");
+    const signature = tabs.map((tab) => tab.textContent + (tab.getAttribute("aria-selected") === "true" ? "1" : "0")).join("|");
     const existing = menu.querySelectorAll("[data-dms-view-tab]");
-    if (existing.length === tabs.length && menu.getAttribute("data-dms-vtab-sig") === signature) return true;
+    if (existing.length === 1 && menu.getAttribute("data-dms-vtab-sig") === signature) return true;
     for (const old of existing) old.remove();
-    for (const tab of tabs) {
-      const label = hostViewTabLabel(tab);
-      const active = tab.getAttribute("aria-selected") === "true";
-      const item = sample.cloneNode(true);
-      item.setAttribute("data-dms-view-tab", label);
-      item.setAttribute("role", "menuitem");
-      item.removeAttribute("aria-disabled");
-      item.removeAttribute("disabled");
-      const svg = item.querySelector("svg");
-      if (svg !== null) svg.remove();
-      const spans = [...item.querySelectorAll("span")].filter((span) => (span.textContent || "").trim().length > 0);
-      const labelEl = spans.length > 0 ? spans[spans.length - 1] : null;
-      if (labelEl !== null) labelEl.textContent = (active ? "\u2713 " : "") + label;
-      else item.textContent = (active ? "\u2713 " : "") + label;
-      item.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        try {
-          tab.click();
-        } catch (error) {
-        }
-        closeSessionActionsMenu();
-      });
-      menu.appendChild(item);
+    const tab_texts = tabs.map((tab) => tab.textContent);
+    const item = sample.cloneNode(true);
+    item.setAttribute("data-dms-view-tab", tab_texts.join("|"));
+    item.setAttribute("role", "menuitem");
+    item.removeAttribute("aria-disabled");
+    item.removeAttribute("disabled");
+    const svg = item.querySelector("svg");
+    if (svg !== null) svg.remove();
+    const first_active = tabs[0].getAttribute("aria-selected") === "true";
+    const spans = [...item.querySelectorAll("span")].filter((span) => (span.textContent || "").trim().length > 0);
+    const labelEl = spans.length > 0 ? spans[spans.length - 1] : null;
+    if (first_active) {
+      labelEl.textContent = "\u21C4" + tab_texts[1];
+    } else {
+      labelEl.textContent = "\u21C4" + tab_texts[0];
     }
+    item.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        tabs[first_active ? 1 : 0].click();
+      } catch (error) {
+        console.error("\u5207\u6362\u89C6\u56FE\u5931\u8D25\uFF1A", error);
+      }
+      closeSessionActionsMenu();
+    });
+    menu.appendChild(item);
     menu.setAttribute("data-dms-vtab-sig", signature);
     document.documentElement.classList.add("dms-vtabs-menu");
-    state.rightViewTabsFallback = false;
-    state.rightViewTabsInjected = true;
     return true;
   }
   function scanViewTabsMenu() {
@@ -1811,7 +1762,6 @@ var DMS = (() => {
       if (!isSessionMenu) continue;
       if (injectViewTabsIntoMenu(menu)) return;
       document.documentElement.classList.remove("dms-vtabs-menu");
-      if (hostViewTabs().length > 0) state.rightViewTabsFallback = true;
     }
   }
   function installViewTabsMenu() {
@@ -1838,18 +1788,6 @@ var DMS = (() => {
     disposers.push(() => {
       if (state.rightViewMenuObserver !== null) state.rightViewMenuObserver.disconnect();
     });
-    const fallbackTimer = setInterval(() => {
-      if (state.rightViewTabsInjected || state.rightViewTabsFallback) return;
-      if (hostViewTabs().length === 0) return;
-      const header = $('[class*="_centerCol"] header');
-      const conversation = header !== null && header.querySelector("[data-conversation-header-leading], [data-conversation-header-corner]") !== null;
-      if (!conversation) return;
-      if (sessionActionsAnchor() === null) {
-        state.rightViewTabsFallback = true;
-        document.documentElement.classList.remove("dms-vtabs-menu");
-      }
-    }, 2e3);
-    disposers.push(() => clearInterval(fallbackTimer));
     disposers.push(() => {
       if (state.rightViewMenuRaf !== 0) cancelAnimationFrame(state.rightViewMenuRaf);
     });
@@ -1907,14 +1845,6 @@ var DMS = (() => {
         const overflow = session.querySelector('[class*="_sessionOverflowButton"]') || session.querySelector('[class*="_rowActions"] button');
         if (overflow !== null) {
           overflow.click();
-          return;
-        }
-      }
-      const row = target.closest('li, [class*="_row"], [class*="_entry"], [class*="_card"]');
-      if (row !== null) {
-        const hidden = row.querySelector('[class*="_rowActions"] button, [class*="_actions"] button, [class*="_overflow"], button[aria-haspopup="menu"]');
-        if (hidden !== null) {
-          hidden.click();
           return;
         }
       }
@@ -2777,7 +2707,6 @@ var DMS = (() => {
     root.classList.toggle("dms-left-open", leftOpen());
     root.classList.toggle("dms-right-open", state.rightVisible);
     if (state.rightVisible) unlockRightPanel();
-    if (state.rightVisible && rightPanelContentReady()) stopRightOpenWait(true);
     const panel = settingsPanel();
     root.classList.toggle("dms-settings-open", panel !== null);
     if (panel !== null) ensureSettings(panel);
@@ -2894,7 +2823,7 @@ var DMS = (() => {
       }
       for (const tag of $$('style[data-dsh-mobile-shell="styles"]')) tag.remove();
       for (const el of $$(".dms-scrim")) el.remove();
-      for (const el of $$(".dms-attach-sheet, .dms-attach-backdrop, .dms-right-loading")) el.remove();
+      for (const el of $$(".dms-attach-sheet, .dms-attach-backdrop")) el.remove();
     }, "dsh-mobile-shell: teardown");
   }
   return __toCommonJS(loader_exports);
