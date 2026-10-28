@@ -769,6 +769,9 @@ public final class Payload {
                 if (line.isEmpty()) continue;
                 String[] parts = line.split("\t", 3);
                 if (parts.length < 2) continue;
+                // "." is the rootfs root directory; chmod 644 on it removes
+                // write/execute and makes the install marker unwritable.
+                if (parts[1].isEmpty() || parts[1].equals(".")) continue;
                 int mode;
                 try {
                     mode = Integer.parseInt(parts[0], 8);
