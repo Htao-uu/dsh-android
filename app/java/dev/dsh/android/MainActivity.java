@@ -316,6 +316,11 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                 + "window.Worker.prototype=N.prototype;"
                 + "})();";
         view.evaluateJavascript(shim, null);
+        // DSH 0.2.2 sign-in preopens a blank tab and later assigns its
+        // location. A stock WebView has no popup -> blank page with no way
+        // back. Return a tiny popup proxy and open the authorization URL via
+        // the normal external-browser interception.
+        view.evaluateJavascript("(function(){if(window.__dshPopupFix)return;window.__dshPopupFix=true;var n=window.open;window.open=function(u,name){if((u==='about:blank'||u===''||u==null)&&(name==='_blank'||name===undefined)){var p={closed:false,opener:null,focus:function(){},blur:function(){}};p.close=function(){p.closed=true;};p.location={replace:function(v){try{window.location.href=v;}catch(e){}}};return p;}return n.apply(window,arguments);};})();", null);
     }
 
     private void createWebView() {
@@ -337,6 +342,8 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
+        settings.setSupportMultipleWindows(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setUserAgentString(settings.getUserAgentString() + " DshAndroid/1.0");
         // ANDROID-BRIDGE.md's native half. This WebView only ever loads the app's
         // own pages (the harness on 127.0.0.1 and the recovery console), so the
@@ -1852,7 +1859,11 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                 "(function(){try{return window.__dshmBack?window.__dshmBack():false}catch(e){return false}})()",
                 value -> {
                     if (!"true".equals(value)) {
-                        moveTaskToBack(true);
+                        if (web != null && web.canGoBack()) {
+                            web.goBack();
+                        } else {
+                            moveTaskToBack(true);
+                        }
                     }
                 });
     }
