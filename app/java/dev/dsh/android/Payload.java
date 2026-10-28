@@ -655,7 +655,19 @@ public final class Payload {
     private static void unpack(Context ctx, File home, File stagedZip, File stagedManifest,
                                String version, Progress progress, UnpackPlan plan,
                                long startedAt, int[] callbacks) throws IOException {
-        deleteTree(home);
+        // A failed extraction can leave symlinks (notably /bin -> /usr/bin)
+        // that a retry cannot overwrite. Move the old tree aside first and
+        // unpack into a fresh directory; only the distro rootfs is replaced,
+        // the guest home and app data are untouched.
+        if (home.exists()) {
+            File old = new File(home.getPath() + ".old");
+            deleteTree(old);
+            if (!home.renameTo(old)) {
+                deleteTree(home);
+            } else {
+                deleteTree(old);
+            }
+        }
         if (!home.mkdirs() && !home.isDirectory()) {
             throw new IOException("cannot create " + home);
         }
@@ -875,6 +887,15 @@ public final class Payload {
         }
         if (!file.exists()) return;
         if (file.isDirectory()) {
+            // A rootfs extracted by an older/partial install can carry 0555
+            // directories; without these bits neither deleteTree nor a retry
+            // can write inside them (the /etc/.pwd.lock EACCES failure).
+            //noinspection ResultOfMethodCallIgnored
+            file.setWritable(true);
+            //noinspection ResultOfMethodCallIgnored
+            file.setReadable(true);
+            //noinspection ResultOfMethodCallIgnored
+            file.setExecutable(true);
             File[] children = file.listFiles();
             if (children != null) {
                 for (File child : children) deleteTree(child);
