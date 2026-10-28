@@ -241,6 +241,7 @@ public final class Panel {
         body.addView(toggle("共享手机存储到 /sdcard", "shareStorage"));
         body.addView(toggle("后台保活（前台服务 + WakeLock）", "keepAwake"));
         body.addView(toggle("异常退出后自动重启服务", "autoRestart"));
+        body.addView(toggle("调试日志（默认关，重启服务后写 /sdcard/DSH/dsh-debug.log）", "debugLog", false));
         body.addView(action("保存设置", () -> {
             saveSettings();
             host.onSaveSettings();
@@ -359,6 +360,8 @@ public final class Panel {
         if (awake != null) awake.setChecked(app.prefs.getBoolean("keepAwake", true));
         Switch restart = view.findViewWithTag("autoRestart");
         if (restart != null) restart.setChecked(app.prefs.getBoolean("autoRestart", true));
+        Switch debug = view.findViewWithTag("debugLog");
+        if (debug != null) debug.setChecked(app.prefs.getBoolean("debugLog", false));
 
         // Recovery.
         boolean recovery = Recovery.active();
@@ -490,13 +493,17 @@ public final class Panel {
     }
 
     private View toggle(String label, String key) {
+        return toggle(label, key, true);
+    }
+
+    private View toggle(String label, String key, boolean defaultValue) {
         Switch toggle = new Switch(ctx);
         toggle.setText(label);
         toggle.setTextSize(13);
         toggle.setTextColor(TEXT);
         toggle.setTag(key);
         toggle.setPadding(0, dp(6), 0, dp(6));
-        toggle.setChecked(App.i().prefs.getBoolean(key, true));
+        toggle.setChecked(App.i().prefs.getBoolean(key, defaultValue));
         toggle.setOnCheckedChangeListener((v, checked) ->
                 App.i().prefs.edit().putBoolean(key, checked).apply());
         return toggle;

@@ -7,6 +7,7 @@ import android.os.Looper;
 
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -160,6 +161,11 @@ public final class ServerBus {
         } else {
             command = distro.command;
         }
+        // Replace the PDF.js bundle with the ArkWeb-compatible one shipped in
+        // this APK. Done before PRoot starts, so a stale payload extraction or
+        // WebView cache cannot keep the broken bundle alive.
+        installPdfClient(distro.root);
+
         List<String> argv = Proot.argv(ctx, distro.root, command);
 
         ProcessBuilder builder = new ProcessBuilder(argv);
@@ -187,6 +193,12 @@ public final class ServerBus {
         env.put("DSH_ANDROID_BRIDGE_URL", "http://127.0.0.1:" + app.bridgePort());
         env.put("DSH_ANDROID_BRIDGE_TOKEN", app.ensureBridgeToken());
         env.put("DSH_ANDROID_APP", "1");
+        env.put("DSH_PAYLOAD_VERSION", BuildInfo.PAYLOAD_VERSION);
+        if (app.prefs.getBoolean("debugLog", false)) {
+            env.put("DSH_DEBUG_LOG", "1");
+            env.put("DSH_LOG_LEVEL", "debug");
+            env.put("NODE_OPTIONS", "--trace-warnings --trace-uncaught");
+        }
         if (Recovery.active()) {
             // The token is root's password inside the guest for exactly as long
             // as this process lives: recovery.sh installs it on the way up and
@@ -231,6 +243,7 @@ public final class ServerBus {
                 file.write(line);
                 file.write('\n');
                 file.flush();
+                App.i().appendDebugLog(line);
                 onLine(line);
             }
         } catch (Exception e) {
@@ -306,6 +319,25 @@ public final class ServerBus {
         }, "recovery-relock");
         lock.setDaemon(true);
         lock.start();
+    }
+
+    /** Copy assets/client.pdf.js over the guest PDF viewer, before node starts. */
+    private static void installPdfClient(File rootfs) {
+        File target = new File(rootfs,
+                "opt/dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js");
+        if (!target.isFile()) return;
+        String assetKey = BuildInfo.PAYLOAD_VERSION + ":" + target.length();
+        if (App.i().prefs.getString("pdfClientAsset", "").equals(assetKey)) return;
+        try (InputStream in = App.i().getAssets().open("client.pdf.js");
+             OutputStream out = new FileOutputStream(target)) {
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            App.i().prefs.edit().putString("pdfClientAsset", assetKey).apply();
+            App.log("pdf viewer: replaced guest client.pdf.js");
+        } catch (Throwable error) {
+            App.log("pdf viewer: replacement failed: " + error);
+        }
     }
 
     private static void onLine(String line) {

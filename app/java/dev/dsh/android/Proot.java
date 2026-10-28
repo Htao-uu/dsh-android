@@ -93,6 +93,17 @@ public final class Proot {
         }
         cmd.add("-b");
         cmd.add(home.getAbsolutePath() + ":/root");
+        // Android system fonts are readable by the app but invisible inside
+        // the guest. Bind them where repair-dsh.mjs can link them for LibreOffice.
+        File systemFonts = new File("/system/fonts");
+        if (systemFonts.isDirectory() && systemFonts.canRead()) {
+            File guestFonts = new File(rootfs, "opt/dsh/android/system-fonts");
+            if (!guestFonts.isDirectory() && !guestFonts.mkdirs()) {
+                App.log("cannot create guest system-fonts dir " + guestFonts);
+            }
+            cmd.add("-b");
+            cmd.add(systemFonts.getAbsolutePath() + ":/opt/dsh/android/system-fonts");
+        }
         File shared = App.i().sharedStorage();
         if (shared != null) {
             cmd.add("-b");

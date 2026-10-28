@@ -297,8 +297,27 @@ public final class App extends Application {
             try (OutputStream out = new FileOutputStream(app.serverLog, true)) {
                 out.write((stamp + "  " + message + "\n").getBytes("UTF-8"));
             }
+            app.appendDebugLog(stamp + "  " + message);
         } catch (IOException ignored) {
             // logging must never take the app down
+        }
+    }
+
+    /**
+     * Optional public debug mirror. Disabled by default; enabled from the panel.
+     * Server output is appended here so it can be pulled with adb even when the
+     * app is a release build and run-as is unavailable.
+     */
+    public void appendDebugLog(String line) {
+        if (prefs == null || !prefs.getBoolean("debugLog", false)) return;
+        File ext = sharedStorage();
+        if (ext == null) return;
+        File dir = new File(ext, "DSH");
+        if (!dir.isDirectory() && !dir.mkdirs()) return;
+        try (OutputStream out = new FileOutputStream(new File(dir, "dsh-debug.log"), true)) {
+            out.write((line + "\n").getBytes("UTF-8"));
+        } catch (IOException ignored) {
+            // diagnostics must never break the app
         }
     }
 

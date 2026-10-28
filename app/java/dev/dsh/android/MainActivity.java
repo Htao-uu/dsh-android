@@ -18,6 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -299,7 +300,26 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
 
     // ------------------------------------------------------------- UI construction
 
+    /** Polyfill Promise.try/Iterator inside blob workers created by PDF.js. */
+    private void injectWorkerCompat(WebView view) {
+        String shim = "(function(){"
+                + "var K='__dshWorkerCompat'; if(window[K]) return; window[K]=true;"
+                + "var N=window.Worker; if(!N) return;"
+                + "function prelude(){return \"if(typeof Promise.try!=='function'){Promise.try=function(fn){var a=[].slice.call(arguments,1);return new Promise(function(res){res(fn.apply(void 0,a));});};}\\n\""
+                + "+\"if(typeof self.Iterator==='undefined'){self.Iterator=function Iterator(){};}\\n\";}"
+                + "window.Worker=function(url,options){"
+                + "try{ if(typeof url==='string'&&url.indexOf('blob:')===0){"
+                + "var x=new XMLHttpRequest(); x.open('GET',url,false); x.send(null);"
+                + "var b=new Blob([prelude()+x.responseText],{type:'text/javascript'});"
+                + "return new N(URL.createObjectURL(b),options); } }catch(e){}"
+                + "return new N(url,options);};"
+                + "window.Worker.prototype=N.prototype;"
+                + "})();";
+        view.evaluateJavascript(shim, null);
+    }
+
     private void createWebView() {
+        WebView.setWebContentsDebuggingEnabled(true);
         web = new WebView(this);
         // A WebView paints white until its first content arrives; the harness is
         // dark, so that flash is the first thing the user sees on every launch.
@@ -371,6 +391,7 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
                 // Re-inject on every navigation: the harness page is a SPA, so a
                 // reload would otherwise lose the bridge handle the plugin reads.
                 injectBridge();
+                injectWorkerCompat(view);
                 // The phone-layout patch closes the session drawer on selection;
                 // nothing to inject here, the payload already ships it.
                 // A prompt that arrived while the page was still loading (the
@@ -384,6 +405,15 @@ public final class MainActivity extends Activity implements ServerBus.Listener, 
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage message) {
+                if (message != null) {
+                    App.i().appendDebugLog("[webview " + message.messageLevel() + "] "
+                            + message.message() + " @" + message.sourceId() + ":" + message.lineNumber());
+                }
+                return false;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
                                              FileChooserParams params) {

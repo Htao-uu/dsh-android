@@ -17,6 +17,13 @@ DSH_PORT="${DSH_PORT:-3080}"
 DSH_PTY_PORT="${DSH_PTY_PORT:-3099}"
 GUEST_HOME="${HOME:-/root}"
 DSH_INSTALL="${DSH_INSTALL:-/opt/dsh}"
+DSH_PAYLOAD_VERSION="${DSH_PAYLOAD_VERSION:-unknown}"
+
+if [ "${DSH_DEBUG_LOG:-0}" = "1" ]; then
+  echo "start-dsh: debug logging enabled"
+  export DSH_LOG_LEVEL=debug
+  export NODE_OPTIONS="${NODE_OPTIONS:-} --trace-warnings --trace-uncaught"
+fi
 
 # Node lives in different places per distribution (distro package: /usr/bin,
 # official tarball or nvm: /usr/local/bin). Resolve it once so the same payload
@@ -67,15 +74,29 @@ if [ ! -f "$GUEST_HOME/.dsh/profiles/web/package.json" ] && [ -d "$DSH_INSTALL/d
   cp -a "$DSH_INSTALL/dsh-home-seed/." "$GUEST_HOME/.dsh/"
 fi
 
-# Boot repairs in one Node process: repair-dsh.mjs (already-installed sandbox
-# fixes) and repair-profile.mjs (top up a profile that already exists — the
-# copy above is wholesale and only once; this one is per file and append-only,
-# so a build that adds a bundle row still reaches an installed device).
-# They used to be two node starts; on the phone each costs ~0.2 s before the
-# harness may even begin.
-"$NODE" "$DSH_INSTALL/android/boot-prep.mjs" \
-  "$DSH_INSTALL/node_modules" "$DSH_INSTALL/dsh-home-seed" "$GUEST_HOME" \
-  2>&1 | sed 's/^/start-dsh: /' || true
+# Boot repairs run only when the payload, DSH, or repair script changes.
+# They used to run on every start: repair-dsh scans multiple large client
+# bundles, repair-profile re-reads the profile, and both are pure overhead on
+# an unchanged installation.
+boot_marker="$GUEST_HOME/.dsh/.boot-prep-key"
+dsh_version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DSH_INSTALL/node_modules/@deepseek-ai/dsh/package.json" 2>/dev/null | head -n 1)"
+repair_sum="$(cksum "$DSH_INSTALL/android/repair-dsh.mjs" "$DSH_INSTALL/android/repair-profile.mjs" "$DSH_INSTALL/dsh-home-seed/profiles/web/package.json" 2>/dev/null | cksum | awk '{print $1}')"
+boot_key="$DSH_PAYLOAD_VERSION|${dsh_version:-unknown}|${repair_sum:-unknown}"
+if [ "$(cat "$boot_marker" 2>/dev/null)" = "$boot_key" ]; then
+  echo "start-dsh: boot repairs up to date ($boot_key)"
+else
+  echo "start-dsh: boot repairs needed ($boot_key)"
+  boot_log="$GUEST_HOME/.dsh-boot-prep.log"
+  : > "$boot_log"
+  if "$NODE" "$DSH_INSTALL/android/boot-prep.mjs" \
+      "$DSH_INSTALL/node_modules" "$DSH_INSTALL/dsh-home-seed" "$GUEST_HOME" >>"$boot_log" 2>&1; then
+    sed 's/^/start-dsh: /' "$boot_log"
+    printf '%s\n' "$boot_key" > "$boot_marker"
+  else
+    sed 's/^/start-dsh: /' "$boot_log"
+    echo "start-dsh: boot repairs failed; will retry next start"
+  fi
+fi
 
 # The plugin is app code, not user data: refresh it on every start so an app
 # update actually ships (the home itself is only seeded once, to keep sessions,
@@ -83,17 +104,18 @@ fi
 # that lives in cordis.patch.yml, which we never rewrite.
 # Older builds ran with PRoot's --link2symlink, which left .l2s.* stand-ins for
 # hard links in the harness home. They are pure artifacts, and a dangling one
-# reads as a corrupt file, so clear them at startup.
-rm -f "$GUEST_HOME"/.l2s.* 2>/dev/null || true
-find "$GUEST_HOME" -maxdepth 3 -name '.l2s.*' -delete 2>/dev/null || true
+# reads as a corrupt file, so clear them only when such an artifact is present.
+if ls "$GUEST_HOME"/.l2s.* >/dev/null 2>&1; then
+  rm -f "$GUEST_HOME"/.l2s.* 2>/dev/null || true
+  find "$GUEST_HOME" -maxdepth 3 -name '.l2s.*' -delete 2>/dev/null || true
+fi
 
-# Performance fix: the legacy android-mobile.js observed style/class mutations
-# on the whole body subtree. The mobile-shell plugin writes transforms every
-# animation frame, so that observer re-ran on every frame. The hot overlay
-# carries the optimized file next to this script; install it over the frontend
-# asset before the web server starts.
+# Refresh the frontend asset only when its content differs. The old code
+# copied it on every boot even though a payload update is what changes it.
 if [ -f "$DSH_INSTALL/android/android-mobile.js" ] && [ -f "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js" ]; then
-  cp -f "$DSH_INSTALL/android/android-mobile.js" "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js" 2>/dev/null || true
+  if ! cmp -s "$DSH_INSTALL/android/android-mobile.js" "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js"; then
+    cp -f "$DSH_INSTALL/android/android-mobile.js" "$DSH_INSTALL/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/android-mobile.js" 2>/dev/null || true
+  fi
 fi
 
 # Refresh the plugin the profile resolves. The app writes this same path
